@@ -20,7 +20,12 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "sqlite:///./budgetcsv.db"
 
     # CORS
-    CORS_ORIGINS: list[str] = ["http://localhost:5173", "http://localhost:3000"]
+    CORS_ORIGINS: list[str] = [
+        "http://localhost:5173",
+        "http://localhost:3000",
+        "https://budget-app-git-main-thomas-projects-8638ab9e.vercel.app",
+        "https://budgetapp-new.vercel.app",
+    ]
 
 
 settings = Settings()

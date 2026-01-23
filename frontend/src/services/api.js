@@ -1,6 +1,7 @@
 import axios from 'axios';
 
-const API_BASE = 'http://localhost:8000/api/v1';
+// Use environment variable for production, fallback to localhost for development
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
 
 const client = axios.create({
   baseURL: API_BASE,
