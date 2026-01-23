@@ -1,0 +1,35 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  @apply bg-offwhite text-charcoal;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-gray-100;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-tiffany-300 rounded-full;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-tiffany-400;
+}
+
+/* Focus ring styles */
+.focus-tiffany:focus {
+  @apply outline-none ring-2 ring-tiffany ring-offset-2;
+}
+
+/* Card hover effect */
+.card-hover {
+  @apply transition-shadow duration-200 hover:shadow-lg;
+}
