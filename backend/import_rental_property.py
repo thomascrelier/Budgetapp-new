@@ -78,7 +78,7 @@ def categorize(description, amount):
 
     # E-TRANSFER fallback: income if credit, transfers if debit
     if "E-TRANSFER" in desc_upper:
-        return "Income" if amount > 0 else "Transfers & Payments"
+        return "Rental Income" if amount > 0 else "Transfers & Payments"
 
     return "Uncategorized"
 

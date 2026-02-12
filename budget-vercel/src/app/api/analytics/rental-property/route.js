@@ -3,7 +3,7 @@ import { getAllTransactions, getAccountByName } from '@/lib/sheets';
 
 // CRA T776 Rental Income Tax Form groupings
 const T776_GROUPS = [
-  { name: 'Gross Rental Income', categories: ['Income'], isIncome: true },
+  { name: 'Gross Rental Income', categories: ['Rental Income'], isIncome: true },
   { name: 'Property Taxes', categories: ['Property Tax'], isIncome: false },
   { name: 'Insurance', categories: ['Insurance'], isIncome: false },
   { name: 'Repairs & Maintenance', categories: ['Housing', 'Renovations', 'Maintenance'], isIncome: false },

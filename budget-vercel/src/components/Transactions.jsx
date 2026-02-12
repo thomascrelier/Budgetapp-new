@@ -13,6 +13,7 @@ const CATEGORIES = [
   'Shopping',
   'Healthcare',
   'Income',
+  'Rental Income',
   'Rent',
   'Electricity',
   'Gas',
