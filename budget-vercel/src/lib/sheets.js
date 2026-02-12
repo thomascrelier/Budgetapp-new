@@ -298,6 +298,14 @@ export async function getTransactions(filters = {}) {
   // Sort by date descending
   transactions.sort((a, b) => b.date.localeCompare(a.date));
 
+  // Enrich with account names
+  const accounts = await getAccounts(true);
+  const accountMap = Object.fromEntries(accounts.map(a => [a.id, a.name]));
+  transactions = transactions.map(t => ({
+    ...t,
+    account_name: accountMap[t.account_id] || 'Unknown',
+  }));
+
   // Pagination
   const skip = filters.skip || 0;
   const limit = filters.limit || 50;

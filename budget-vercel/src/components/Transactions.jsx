@@ -127,6 +127,9 @@ export default function Transactions({ selectedAccount }) {
                     Date
                   </th>
                   <th className="px-6 py-4 text-left text-xs font-semibold text-text-secondary uppercase tracking-wider">
+                    Account
+                  </th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-text-secondary uppercase tracking-wider">
                     Description
                   </th>
                   <th className="px-6 py-4 text-right text-xs font-semibold text-text-secondary uppercase tracking-wider">
@@ -142,6 +145,9 @@ export default function Transactions({ selectedAccount }) {
                   <tr key={transaction.id} className="hover:bg-surface-hover transition-colors">
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-text-primary">
                       {transaction.date}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-text-secondary">
+                      {transaction.account_name}
                     </td>
                     <td className="px-6 py-4 text-sm text-text-primary max-w-md truncate">
                       {transaction.description}
