@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   ComposedChart,
   BarChart,
@@ -17,6 +17,7 @@ import {
   Cell,
 } from 'recharts';
 import api from '@/lib/api';
+import SankeyChart from './SankeyChart';
 
 const COLORS = ['#171717', '#525252', '#737373', '#A3A3A3', '#D4D4D4', '#E5E5E5', '#404040', '#262626'];
 
@@ -107,6 +108,36 @@ export default function RentalProperty() {
       [String(year)]: c.selected_year_total,
       [String(prev_year)]: c.prev_year_total,
     }));
+
+  // Sankey data
+  const sankeyData = useMemo(() => {
+    if (!category_breakdown || category_breakdown.length === 0) return null;
+
+    const incomeTotal = annual_summary.total_income || 0;
+    const expenseCategories = category_breakdown.filter(c => !c.is_income && c.selected_year_total > 0);
+
+    if (incomeTotal === 0 || expenseCategories.length === 0) return null;
+
+    const totalExpenses = expenseCategories.reduce((sum, c) => sum + c.selected_year_total, 0);
+    const surplus = Math.max(0, incomeTotal - totalExpenses);
+
+    const nodes = [
+      { name: 'Rental Income' },
+      ...expenseCategories.map(c => ({ name: c.category })),
+    ];
+    if (surplus > 0) nodes.push({ name: 'Net Surplus' });
+
+    const links = expenseCategories.map((c, i) => ({
+      source: 0,
+      target: i + 1,
+      value: c.selected_year_total,
+    }));
+    if (surplus > 0) {
+      links.push({ source: 0, target: nodes.length - 1, value: surplus });
+    }
+
+    return { nodes, links };
+  }, [category_breakdown, annual_summary]);
 
   // Delta color helpers
   const incomeDeltaColor = (dollars) => dollars >= 0 ? 'text-positive' : 'text-negative';
@@ -366,6 +397,14 @@ export default function RentalProperty() {
           )}
         </div>
       </div>
+
+      {/* Income Flow (Sankey) */}
+      {sankeyData && (
+        <div className="bg-surface rounded-xl shadow-sm border border-border p-6">
+          <h2 className="text-lg font-bold text-text-primary mb-4">Income Flow</h2>
+          <SankeyChart data={sankeyData} width={800} height={400} />
+        </div>
+      )}
 
       {/* Year-over-Year Category Comparison */}
       {yoyCategoryData.length > 0 && (
