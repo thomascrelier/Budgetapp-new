@@ -2,7 +2,7 @@ import NextAuth from 'next-auth';
 import GoogleProvider from 'next-auth/providers/google';
 
 // Your email - only this account can access the app
-const ALLOWED_EMAIL = process.env.ALLOWED_EMAIL;
+const ALLOWED_EMAIL = process.env.ALLOWED_EMAIL?.trim();
 
 const handler = NextAuth({
   providers: [
