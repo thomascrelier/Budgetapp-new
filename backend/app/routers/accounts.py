@@ -168,6 +168,41 @@ def delete_account(account_id: int, db: Session = Depends(get_db)):
     db.commit()
 
 
+@router.post("/initialize-defaults")
+def initialize_default_accounts(db: Session = Depends(get_db)):
+    """
+    Initialize the three default accounts if they don't exist:
+    - Main Chequing
+    - Rental Property
+    - Visa Credit Card
+    """
+    default_accounts = [
+        {"name": "Main Chequing", "account_type": "checking", "initial_balance": 0},
+        {"name": "Rental Property", "account_type": "checking", "initial_balance": 0},
+        {"name": "Visa Credit Card", "account_type": "credit_card", "initial_balance": 0},
+    ]
+
+    created = []
+    existing = []
+
+    for acct_data in default_accounts:
+        acct = db.query(Account).filter(Account.name == acct_data["name"]).first()
+        if acct:
+            existing.append(acct_data["name"])
+        else:
+            account = Account(**acct_data)
+            db.add(account)
+            created.append(acct_data["name"])
+
+    db.commit()
+
+    return {
+        "created": created,
+        "existing": existing,
+        "message": f"Created {len(created)} accounts, {len(existing)} already existed"
+    }
+
+
 @router.get("/{account_id}/balance", response_model=BalanceResponse)
 def get_account_balance(account_id: int, db: Session = Depends(get_db)):
     """Get detailed balance information for an account."""

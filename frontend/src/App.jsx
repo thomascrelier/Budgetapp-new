@@ -6,6 +6,8 @@ import Dashboard from './pages/Dashboard';
 import Transactions from './pages/Transactions';
 import Accounts from './pages/Accounts';
 import BudgetSettings from './pages/BudgetSettings';
+import RentalProperty from './pages/RentalProperty';
+import CashFlow from './pages/CashFlow';
 
 export default function App() {
   const [selectedAccount, setSelectedAccount] = useState(null);
@@ -35,6 +37,21 @@ export default function App() {
                 key={refreshKey}
                 selectedAccount={selectedAccount}
               />
+            }
+          />
+          <Route
+            path="/cash-flow"
+            element={
+              <CashFlow
+                key={refreshKey}
+                selectedAccount={selectedAccount}
+              />
+            }
+          />
+          <Route
+            path="/rental-property"
+            element={
+              <RentalProperty key={refreshKey} />
             }
           />
           <Route

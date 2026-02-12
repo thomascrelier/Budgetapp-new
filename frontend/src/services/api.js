@@ -60,6 +60,8 @@ export const api = {
     if (accountIds) params.account_ids = accountIds;
     return client.get('/analytics/spending-by-category', { params });
   },
+  getRentalPropertyAnalytics: () => client.get('/analytics/rental-property'),
+  initializeDefaultAccounts: () => client.post('/accounts/initialize-defaults'),
 
   // Upload
   uploadCSV: async (file, accountId) => {

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import api from '../services/api';
 
-const CATEGORIES = [
+const DEFAULT_CATEGORIES = [
   'Uncategorized',
   'Groceries',
   'Dining',
@@ -25,12 +25,23 @@ export default function Transactions({ selectedAccount }) {
   const [sortBy, setSortBy] = useState('date');
   const [sortOrder, setSortOrder] = useState('desc');
   const [editingCategory, setEditingCategory] = useState(null);
+  const [customCategory, setCustomCategory] = useState('');
+  const [showCustomInput, setShowCustomInput] = useState(false);
+  const [customCategories, setCustomCategories] = useState(() => {
+    const saved = localStorage.getItem('customCategories');
+    return saved ? JSON.parse(saved) : [];
+  });
 
+  const allCategories = [...DEFAULT_CATEGORIES, ...customCategories];
   const limit = 50;
 
   useEffect(() => {
     loadTransactions();
   }, [selectedAccount, page, sortBy, sortOrder]);
+
+  useEffect(() => {
+    localStorage.setItem('customCategories', JSON.stringify(customCategories));
+  }, [customCategories]);
 
   const loadTransactions = async () => {
     setLoading(true);
@@ -67,6 +78,10 @@ export default function Transactions({ selectedAccount }) {
   };
 
   const handleCategoryChange = async (transactionId, newCategory) => {
+    if (newCategory === '__custom__') {
+      setShowCustomInput(true);
+      return;
+    }
     try {
       await api.updateCategory(transactionId, newCategory);
       setTransactions((prev) =>
@@ -75,9 +90,22 @@ export default function Transactions({ selectedAccount }) {
         )
       );
       setEditingCategory(null);
+      setShowCustomInput(false);
+      setCustomCategory('');
     } catch (error) {
       console.error('Failed to update category:', error);
     }
+  };
+
+  const handleCustomCategorySubmit = async (transactionId) => {
+    if (!customCategory.trim()) return;
+
+    const newCat = customCategory.trim();
+    if (!customCategories.includes(newCat) && !DEFAULT_CATEGORIES.includes(newCat)) {
+      setCustomCategories((prev) => [...prev, newCat]);
+    }
+
+    await handleCategoryChange(transactionId, newCat);
   };
 
   const formatCurrency = (value) => {
@@ -105,11 +133,11 @@ export default function Transactions({ selectedAccount }) {
       );
     }
     return sortOrder === 'asc' ? (
-      <svg className="w-4 h-4 text-tiffany" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <svg className="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
       </svg>
     ) : (
-      <svg className="w-4 h-4 text-tiffany" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <svg className="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
       </svg>
     );
@@ -131,10 +159,10 @@ export default function Transactions({ selectedAccount }) {
       <div className="bg-white rounded-xl shadow-md overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-tiffany-light">
+            <thead className="bg-primary-light">
               <tr>
                 <th
-                  className="px-6 py-4 text-left text-sm font-semibold text-charcoal cursor-pointer hover:bg-tiffany-100 transition-colors"
+                  className="px-6 py-4 text-left text-sm font-semibold text-charcoal cursor-pointer hover:bg-primary-100 transition-colors"
                   onClick={() => handleSort('date')}
                 >
                   <div className="flex items-center gap-2">
@@ -143,7 +171,7 @@ export default function Transactions({ selectedAccount }) {
                   </div>
                 </th>
                 <th
-                  className="px-6 py-4 text-left text-sm font-semibold text-charcoal cursor-pointer hover:bg-tiffany-100 transition-colors"
+                  className="px-6 py-4 text-left text-sm font-semibold text-charcoal cursor-pointer hover:bg-primary-100 transition-colors"
                   onClick={() => handleSort('description')}
                 >
                   <div className="flex items-center gap-2">
@@ -152,7 +180,7 @@ export default function Transactions({ selectedAccount }) {
                   </div>
                 </th>
                 <th
-                  className="px-6 py-4 text-right text-sm font-semibold text-charcoal cursor-pointer hover:bg-tiffany-100 transition-colors"
+                  className="px-6 py-4 text-right text-sm font-semibold text-charcoal cursor-pointer hover:bg-primary-100 transition-colors"
                   onClick={() => handleSort('amount')}
                 >
                   <div className="flex items-center justify-end gap-2">
@@ -170,7 +198,7 @@ export default function Transactions({ selectedAccount }) {
                 <tr>
                   <td colSpan={4} className="px-6 py-12 text-center">
                     <div className="flex items-center justify-center">
-                      <div className="animate-spin rounded-full h-8 w-8 border-4 border-tiffany border-t-transparent"></div>
+                      <div className="animate-spin rounded-full h-8 w-8 border-4 border-primary border-t-transparent"></div>
                     </div>
                   </td>
                 </tr>
@@ -199,7 +227,7 @@ export default function Transactions({ selectedAccount }) {
                       <td className="px-6 py-4 text-right">
                         <span
                           className={`text-sm font-semibold ${
-                            isExpense ? 'text-red-600' : 'text-green-600'
+                            isExpense ? 'text-accent' : 'text-green-600'
                           }`}
                         >
                           {formatCurrency(transaction.amount)}
@@ -207,25 +235,69 @@ export default function Transactions({ selectedAccount }) {
                       </td>
                       <td className="px-6 py-4">
                         {editingCategory === transaction.id ? (
-                          <select
-                            autoFocus
-                            value={transaction.category || 'Uncategorized'}
-                            onChange={(e) =>
-                              handleCategoryChange(transaction.id, e.target.value)
-                            }
-                            onBlur={() => setEditingCategory(null)}
-                            className="px-3 py-1.5 text-sm border border-tiffany rounded-lg focus:outline-none focus:ring-2 focus:ring-tiffany focus:border-transparent"
-                          >
-                            {CATEGORIES.map((cat) => (
-                              <option key={cat} value={cat}>
-                                {cat}
-                              </option>
-                            ))}
-                          </select>
+                          <div className="flex flex-col gap-2">
+                            {showCustomInput ? (
+                              <div className="flex gap-2">
+                                <input
+                                  type="text"
+                                  autoFocus
+                                  value={customCategory}
+                                  onChange={(e) => setCustomCategory(e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      handleCustomCategorySubmit(transaction.id);
+                                    } else if (e.key === 'Escape') {
+                                      setShowCustomInput(false);
+                                      setCustomCategory('');
+                                      setEditingCategory(null);
+                                    }
+                                  }}
+                                  placeholder="Type category name..."
+                                  className="px-3 py-1.5 text-sm border border-primary rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent w-40"
+                                />
+                                <button
+                                  onClick={() => handleCustomCategorySubmit(transaction.id)}
+                                  className="px-3 py-1.5 text-sm bg-primary text-white rounded-lg hover:bg-primary-dark"
+                                >
+                                  Save
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setShowCustomInput(false);
+                                    setCustomCategory('');
+                                  }}
+                                  className="px-3 py-1.5 text-sm bg-gray-200 text-charcoal rounded-lg hover:bg-gray-300"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            ) : (
+                              <select
+                                autoFocus
+                                value={transaction.category || 'Uncategorized'}
+                                onChange={(e) =>
+                                  handleCategoryChange(transaction.id, e.target.value)
+                                }
+                                onBlur={() => {
+                                  if (!showCustomInput) {
+                                    setEditingCategory(null);
+                                  }
+                                }}
+                                className="px-3 py-1.5 text-sm border border-primary rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                              >
+                                {allCategories.map((cat) => (
+                                  <option key={cat} value={cat}>
+                                    {cat}
+                                  </option>
+                                ))}
+                                <option value="__custom__">+ Add custom category...</option>
+                              </select>
+                            )}
+                          </div>
                         ) : (
                           <button
                             onClick={() => setEditingCategory(transaction.id)}
-                            className="px-3 py-1.5 text-sm bg-gray-100 hover:bg-tiffany-light text-charcoal rounded-lg transition-colors flex items-center gap-1"
+                            className="px-3 py-1.5 text-sm bg-gray-100 hover:bg-primary-light text-charcoal rounded-lg transition-colors flex items-center gap-1"
                           >
                             {transaction.category || 'Uncategorized'}
                             <svg
@@ -269,7 +341,7 @@ export default function Transactions({ selectedAccount }) {
               <button
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                 disabled={page === totalPages}
-                className="px-4 py-2 text-sm font-medium text-white bg-tiffany rounded-lg hover:bg-tiffany-dark disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="px-4 py-2 text-sm font-medium text-white bg-primary rounded-lg hover:bg-primary-dark disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 Next
               </button>

@@ -1,3 +1,5 @@
+'use client';
+
 import { useState, useEffect } from 'react';
 import {
   BarChart,
@@ -11,11 +13,9 @@ import {
   ResponsiveContainer,
   Legend,
 } from 'recharts';
-import api from '../services/api';
-import KpiCard from '../components/KpiCard';
-import BudgetProgressBar from '../components/BudgetProgressBar';
-import SpendingDonut from '../components/SpendingDonut';
-import RecentTransactions from '../components/RecentTransactions';
+import api from '@/lib/api';
+import KpiCard from './KpiCard';
+import BudgetProgressBar from './BudgetProgressBar';
 
 export default function Dashboard({ selectedAccount }) {
   const [loading, setLoading] = useState(true);
@@ -24,7 +24,6 @@ export default function Dashboard({ selectedAccount }) {
   const [balanceHistory, setBalanceHistory] = useState([]);
   const [budgetStatus, setBudgetStatus] = useState([]);
   const [accounts, setAccounts] = useState([]);
-  const [spendingData, setSpendingData] = useState({ categories: [], total: 0 });
 
   useEffect(() => {
     loadData();
@@ -35,24 +34,19 @@ export default function Dashboard({ selectedAccount }) {
     try {
       const accountIds = selectedAccount || null;
 
-      const [dashboardRes, cashFlowRes, balanceRes, budgetRes, accountsRes, spendingRes] = await Promise.all([
+      const [dashboardRes, cashFlowRes, balanceRes, budgetRes, accountsRes] = await Promise.all([
         api.getDashboard(accountIds),
         api.getCashFlow(6, accountIds),
         api.getBalanceHistory(30, selectedAccount),
         api.getBudgetStatus(null, accountIds),
         api.getAccounts(),
-        api.getSpendingByCategory(null, accountIds),
       ]);
 
-      setDashboard(dashboardRes.data);
-      setCashFlow(cashFlowRes.data.data || []);
-      setBalanceHistory(balanceRes.data.data || []);
-      setBudgetStatus(budgetRes.data.budgets || []);
-      setAccounts(accountsRes.data.accounts || []);
-      setSpendingData({
-        categories: spendingRes.data.categories || [],
-        total: spendingRes.data.total || 0,
-      });
+      setDashboard(dashboardRes);
+      setCashFlow(cashFlowRes.data || []);
+      setBalanceHistory(balanceRes.data || []);
+      setBudgetStatus(budgetRes.budgets || []);
+      setAccounts(accountsRes.accounts || []);
     } catch (error) {
       console.error('Failed to load dashboard data:', error);
     } finally {
@@ -83,7 +77,7 @@ export default function Dashboard({ selectedAccount }) {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-4 border-tiffany border-t-transparent"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-4 border-text-primary border-t-transparent"></div>
       </div>
     );
   }
@@ -94,11 +88,11 @@ export default function Dashboard({ selectedAccount }) {
     <div className="space-y-8">
       {/* Page Header */}
       <div>
-        <h1 className="text-3xl font-bold text-charcoal">Dashboard</h1>
-        <p className="text-gray-500 mt-1">Overview of your financial health</p>
+        <h1 className="text-3xl font-bold text-text-primary">Dashboard</h1>
+        <p className="text-text-tertiary mt-1">Overview of your financial health</p>
       </div>
 
-      {/* Account Balance Cards - Show all 3 main accounts */}
+      {/* Account Balance Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {['Main Chequing', 'Rental Property', 'Visa Credit Card'].map((accountName) => {
           const account = accounts.find(a => a.name === accountName);
@@ -108,50 +102,38 @@ export default function Dashboard({ selectedAccount }) {
           return (
             <div
               key={accountName}
-              className={`bg-white rounded-xl shadow-md p-6 border-l-4 ${
-                isCredit
-                  ? 'border-accent'
-                  : accountName.includes('Rental')
-                    ? 'border-emerald-400'
-                    : 'border-primary'
-              }`}
+              className="bg-surface rounded-xl shadow-sm border border-border p-6 hover:shadow-md transition-shadow"
             >
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-gray-500 text-sm">{accountName}</p>
+                  <p className="text-text-tertiary text-sm">{accountName}</p>
                   <p className={`text-2xl font-bold mt-1 ${
                     isCredit
-                      ? (balance <= 0 ? 'text-emerald-600' : 'text-rose-500')
-                      : (balance >= 0 ? 'text-emerald-600' : 'text-rose-500')
+                      ? (balance <= 0 ? 'text-positive' : 'text-negative')
+                      : (balance >= 0 ? 'text-positive' : 'text-negative')
                   }`}>
                     {formatCurrency(Math.abs(balance))}
                     {isCredit && balance > 0 && <span className="text-sm font-normal ml-1">owed</span>}
                   </p>
                 </div>
-                <div className={`p-3 rounded-full ${
-                  isCredit
-                    ? 'bg-accent-light'
-                    : accountName.includes('Rental')
-                      ? 'bg-emerald-50'
-                      : 'bg-primary-light'
-                }`}>
+                <div className="p-3 rounded-full bg-background">
                   {isCredit ? (
-                    <svg className="w-6 h-6 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-6 h-6 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
                     </svg>
                   ) : accountName.includes('Rental') ? (
-                    <svg className="w-6 h-6 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-6 h-6 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                     </svg>
                   ) : (
-                    <svg className="w-6 h-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-6 h-6 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                   )}
                 </div>
               </div>
               {!account && (
-                <p className="text-xs text-gray-400 mt-2">Account not found</p>
+                <p className="text-xs text-text-muted mt-2">Account not found</p>
               )}
             </div>
           );
@@ -165,7 +147,7 @@ export default function Dashboard({ selectedAccount }) {
           value={kpis.total_balance}
           type="default"
           icon={
-            <svg className="w-6 h-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-6 h-6 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           }
@@ -175,7 +157,7 @@ export default function Dashboard({ selectedAccount }) {
           value={kpis.monthly_spending}
           type="expense"
           icon={
-            <svg className="w-6 h-6 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-6 h-6 text-negative" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" />
             </svg>
           }
@@ -186,50 +168,50 @@ export default function Dashboard({ selectedAccount }) {
           type="dynamic"
           subtitle="This month"
           icon={
-            <svg className="w-6 h-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-6 h-6 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
             </svg>
           }
         />
       </div>
 
-      {/* Middle Row: Cash Flow Chart + Budget Progress */}
+      {/* Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Cash Flow Bar Chart */}
-        <div className="bg-white rounded-xl shadow-md p-6">
-          <h2 className="text-lg font-bold text-charcoal mb-4">Cash Flow</h2>
+        <div className="bg-surface rounded-xl shadow-sm border border-border p-6">
+          <h2 className="text-lg font-bold text-text-primary mb-4">Cash Flow</h2>
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={cashFlow} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+                <CartesianGrid strokeDasharray="3 3" stroke="#E5E5E5" />
                 <XAxis
                   dataKey="month"
                   tickFormatter={formatMonth}
-                  tick={{ fill: '#718096', fontSize: 12 }}
+                  tick={{ fill: '#737373', fontSize: 12 }}
                 />
                 <YAxis
                   tickFormatter={(v) => `$${v/1000}k`}
-                  tick={{ fill: '#718096', fontSize: 12 }}
+                  tick={{ fill: '#737373', fontSize: 12 }}
                 />
                 <Tooltip
                   formatter={(value) => formatCurrency(value)}
                   contentStyle={{
                     backgroundColor: 'white',
-                    border: '1px solid #E5E7EB',
+                    border: '1px solid #E5E5E5',
                     borderRadius: '8px',
                   }}
                 />
                 <Legend />
-                <Bar dataKey="income" name="Income" fill="#34D399" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="expenses" name="Expenses" fill="#FB7185" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="income" name="Income" fill="#22C55E" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="expenses" name="Expenses" fill="#EF4444" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
 
         {/* Budget Progress */}
-        <div className="bg-white rounded-xl shadow-md p-6">
-          <h2 className="text-lg font-bold text-charcoal mb-4">Budget Progress</h2>
+        <div className="bg-surface rounded-xl shadow-sm border border-border p-6">
+          <h2 className="text-lg font-bold text-text-primary mb-4">Budget Progress</h2>
           <div className="space-y-2 max-h-64 overflow-y-auto">
             {budgetStatus.length > 0 ? (
               budgetStatus.map((budget) => (
@@ -243,7 +225,7 @@ export default function Dashboard({ selectedAccount }) {
                 />
               ))
             ) : (
-              <div className="text-center py-8 text-gray-500">
+              <div className="text-center py-8 text-text-tertiary">
                 <p>No budgets set up yet.</p>
                 <p className="text-sm mt-1">Go to Budget Settings to create one.</p>
               </div>
@@ -252,29 +234,29 @@ export default function Dashboard({ selectedAccount }) {
         </div>
       </div>
 
-      {/* Bottom Row: Balance History */}
-      <div className="bg-white rounded-xl shadow-md p-6">
-        <h2 className="text-lg font-bold text-charcoal mb-4">Balance History (Last 30 Days)</h2>
+      {/* Balance History */}
+      <div className="bg-surface rounded-xl shadow-sm border border-border p-6">
+        <h2 className="text-lg font-bold text-text-primary mb-4">Balance History (Last 30 Days)</h2>
         <div className="h-64">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={balanceHistory} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+              <CartesianGrid strokeDasharray="3 3" stroke="#E5E5E5" />
               <XAxis
                 dataKey="date"
                 tickFormatter={formatDate}
-                tick={{ fill: '#718096', fontSize: 12 }}
+                tick={{ fill: '#737373', fontSize: 12 }}
                 interval="preserveStartEnd"
               />
               <YAxis
                 tickFormatter={(v) => `$${(v/1000).toFixed(0)}k`}
-                tick={{ fill: '#718096', fontSize: 12 }}
+                tick={{ fill: '#737373', fontSize: 12 }}
               />
               <Tooltip
                 formatter={(value) => formatCurrency(value)}
                 labelFormatter={(label) => new Date(label).toLocaleDateString()}
                 contentStyle={{
                   backgroundColor: 'white',
-                  border: '1px solid #E5E7EB',
+                  border: '1px solid #E5E5E5',
                   borderRadius: '8px',
                 }}
               />
@@ -282,26 +264,14 @@ export default function Dashboard({ selectedAccount }) {
                 type="monotone"
                 dataKey="balance"
                 name="Balance"
-                stroke="#818CF8"
-                strokeWidth={3}
+                stroke="#171717"
+                strokeWidth={2}
                 dot={false}
-                activeDot={{ r: 6, fill: '#818CF8' }}
+                activeDot={{ r: 6, fill: '#171717' }}
               />
             </LineChart>
           </ResponsiveContainer>
         </div>
-      </div>
-
-      {/* Spending Donut + Recent Transactions */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <SpendingDonut
-          categories={spendingData.categories}
-          total={spendingData.total}
-        />
-        <RecentTransactions
-          selectedAccount={selectedAccount}
-          refreshKey={0}
-        />
       </div>
 
       {/* Budget Alerts */}
@@ -317,7 +287,7 @@ export default function Dashboard({ selectedAccount }) {
             {dashboard.budget_alerts.map((alert) => (
               <li key={alert.category_name} className="flex items-center justify-between text-sm">
                 <span className="font-medium text-red-800">{alert.category_name}</span>
-                <span className="text-rose-500">
+                <span className="text-red-600">
                   {alert.percentage_used.toFixed(0)}% used ({formatCurrency(alert.spent)} / {formatCurrency(alert.monthly_limit)})
                 </span>
               </li>

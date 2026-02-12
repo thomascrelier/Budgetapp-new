@@ -8,21 +8,21 @@ export default function KpiCard({ title, value, subtitle, type = 'default', icon
   };
 
   const getValueColor = () => {
-    if (type === 'expense') return 'text-red-500';
-    if (type === 'income') return 'text-green-500';
+    if (type === 'expense') return 'text-rose-400';
+    if (type === 'income') return 'text-emerald-500';
     if (type === 'dynamic') {
       const num = parseFloat(value) || 0;
-      return num >= 0 ? 'text-green-500' : 'text-red-500';
+      return num >= 0 ? 'text-emerald-500' : 'text-rose-400';
     }
     return 'text-tiffany';
   };
 
   const getBorderColor = () => {
-    if (type === 'expense') return 'border-l-red-500';
-    if (type === 'income') return 'border-l-green-500';
+    if (type === 'expense') return 'border-l-rose-400';
+    if (type === 'income') return 'border-l-emerald-400';
     if (type === 'dynamic') {
       const num = parseFloat(value) || 0;
-      return num >= 0 ? 'border-l-green-500' : 'border-l-red-500';
+      return num >= 0 ? 'border-l-emerald-400' : 'border-l-rose-400';
     }
     return 'border-l-tiffany';
   };

@@ -9,6 +9,7 @@ from app.models import Account, Transaction
 from app.schemas import UploadResponse, PreviewResponse, ValidationIssueSchema
 from app.schemas.upload import SummarySchema
 from app.services.csv_processor import process_csv_file
+from app.services.google_sheets import sheets_service
 from app.utils.exceptions import CSVValidationError, CSVParsingError, CSVColumnError
 
 router = APIRouter(prefix="/upload", tags=["upload"])
@@ -73,6 +74,20 @@ async def upload_csv(
 
         db.commit()
 
+        # Sync to Google Sheets if enabled
+        sheets_result = {"synced": False}
+        if sheets_service.is_enabled():
+            sheets_data = [
+                {
+                    "date": t["date"].isoformat(),
+                    "description": t["description"],
+                    "amount": float(t["amount"]),
+                    "category": t["category"],
+                }
+                for t in result.transactions
+            ]
+            sheets_result = sheets_service.sync_transactions(sheets_data, account.name)
+
         # Convert issues to schema format
         issues = [
             ValidationIssueSchema(
@@ -85,6 +100,11 @@ async def upload_csv(
             for i in result.issues
         ]
 
+        # Build success message
+        message = f"Successfully imported {result.processed_rows} transactions"
+        if sheets_result.get("synced"):
+            message += f" (synced {sheets_result.get('count', 0)} to Google Sheets)"
+
         return UploadResponse(
             success=True,
             batch_id=result.batch_id,
@@ -93,7 +113,7 @@ async def upload_csv(
             skipped_rows=result.skipped_rows,
             issues=issues,
             summary=SummarySchema(**result.summary),
-            message=f"Successfully imported {result.processed_rows} transactions"
+            message=message
         )
 
     except CSVColumnError as e:

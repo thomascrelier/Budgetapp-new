@@ -63,6 +63,33 @@ class CategoryBreakdownResponse(BaseModel):
     month: str
 
 
+class UtilityBreakdown(BaseModel):
+    category: str
+    current_month: Decimal
+    rolling_avg_3m: Decimal
+    rolling_avg_12m: Decimal
+    year_over_year_change: Optional[float]
+
+
+class RentalCashFlow(BaseModel):
+    month: str
+    income: Decimal
+    expenses: Decimal
+    net: Decimal
+    utilities_total: Decimal
+
+
+class RentalAnalyticsResponse(BaseModel):
+    account_id: int
+    account_name: str
+    current_balance: Decimal
+    monthly_cash_flow: Decimal
+    ytd_cash_flow: Decimal
+    utility_breakdown: list[UtilityBreakdown]
+    cash_flow_history: list[RentalCashFlow]
+    year_over_year: Optional[dict]
+
+
 @router.get("/dashboard", response_model=DashboardResponse)
 def get_dashboard(
     account_ids: Optional[str] = Query(
@@ -327,4 +354,222 @@ def get_spending_by_category(
         categories=categories,
         total=total,
         month=f"{year:04d}-{mon:02d}"
+    )
+
+
+# Utility categories for rental property
+UTILITY_CATEGORIES = ["water", "tax", "energy", "internet", "gas", "electricity", "hydro", "property tax"]
+
+
+def is_utility_category(category: str) -> str:
+    """Check if a category is a utility and normalize it."""
+    if not category:
+        return None
+    cat_lower = category.lower()
+    for util in UTILITY_CATEGORIES:
+        if util in cat_lower:
+            # Normalize to standard names
+            if "water" in cat_lower:
+                return "Water"
+            if "tax" in cat_lower:
+                return "Property Tax"
+            if "energy" in cat_lower or "electricity" in cat_lower or "hydro" in cat_lower:
+                return "Energy"
+            if "internet" in cat_lower:
+                return "Internet"
+            if "gas" in cat_lower:
+                return "Gas"
+    return None
+
+
+@router.get("/rental-property", response_model=RentalAnalyticsResponse)
+def get_rental_property_analytics(
+    db: Session = Depends(get_db)
+):
+    """Get detailed analytics for the rental property account."""
+    # Find the Rental Property account
+    account = db.query(Account).filter(Account.name == "Rental Property").first()
+    if not account:
+        raise HTTPException(
+            status_code=404,
+            detail="Rental Property account not found. Please initialize default accounts first."
+        )
+
+    today = date.today()
+    current_year = today.year
+    current_month = today.month
+
+    # Calculate current balance
+    initial = Decimal(str(account.initial_balance))
+    trans_sum = db.query(
+        func.coalesce(func.sum(Transaction.amount), 0)
+    ).filter(Transaction.account_id == account.id).scalar()
+    current_balance = initial + Decimal(str(trans_sum))
+
+    # Get all transactions for this account
+    all_transactions = db.query(Transaction).filter(
+        Transaction.account_id == account.id
+    ).order_by(Transaction.date).all()
+
+    # Calculate monthly cash flow (current month)
+    monthly_income = Decimal("0.00")
+    monthly_expenses = Decimal("0.00")
+    for t in all_transactions:
+        if t.date.year == current_year and t.date.month == current_month:
+            amount = Decimal(str(t.amount))
+            if amount > 0:
+                monthly_income += amount
+            else:
+                monthly_expenses += abs(amount)
+
+    # Calculate YTD cash flow
+    ytd_income = Decimal("0.00")
+    ytd_expenses = Decimal("0.00")
+    for t in all_transactions:
+        if t.date.year == current_year:
+            amount = Decimal(str(t.amount))
+            if amount > 0:
+                ytd_income += amount
+            else:
+                ytd_expenses += abs(amount)
+
+    # Build utility breakdown with rolling averages
+    utility_spending = {}  # {category: {month: amount}}
+    for t in all_transactions:
+        util_cat = is_utility_category(t.category)
+        if util_cat and Decimal(str(t.amount)) < 0:
+            month_key = f"{t.date.year:04d}-{t.date.month:02d}"
+            if util_cat not in utility_spending:
+                utility_spending[util_cat] = {}
+            if month_key not in utility_spending[util_cat]:
+                utility_spending[util_cat][month_key] = Decimal("0.00")
+            utility_spending[util_cat][month_key] += abs(Decimal(str(t.amount)))
+
+    # Calculate rolling averages and YoY
+    utility_breakdown = []
+    current_month_key = f"{current_year:04d}-{current_month:02d}"
+    last_year_month_key = f"{current_year - 1:04d}-{current_month:02d}"
+
+    for util_cat in ["Water", "Property Tax", "Energy", "Internet", "Gas"]:
+        months_data = utility_spending.get(util_cat, {})
+        current_amount = months_data.get(current_month_key, Decimal("0.00"))
+
+        # Rolling 3 month average
+        rolling_3m_total = Decimal("0.00")
+        rolling_3m_count = 0
+        for i in range(3):
+            m = current_month - i
+            y = current_year
+            while m <= 0:
+                m += 12
+                y -= 1
+            key = f"{y:04d}-{m:02d}"
+            if key in months_data:
+                rolling_3m_total += months_data[key]
+                rolling_3m_count += 1
+        rolling_avg_3m = rolling_3m_total / rolling_3m_count if rolling_3m_count > 0 else Decimal("0.00")
+
+        # Rolling 12 month average
+        rolling_12m_total = Decimal("0.00")
+        rolling_12m_count = 0
+        for i in range(12):
+            m = current_month - i
+            y = current_year
+            while m <= 0:
+                m += 12
+                y -= 1
+            key = f"{y:04d}-{m:02d}"
+            if key in months_data:
+                rolling_12m_total += months_data[key]
+                rolling_12m_count += 1
+        rolling_avg_12m = rolling_12m_total / rolling_12m_count if rolling_12m_count > 0 else Decimal("0.00")
+
+        # Year over year change
+        last_year_amount = months_data.get(last_year_month_key, None)
+        yoy_change = None
+        if last_year_amount and last_year_amount > 0 and current_amount > 0:
+            yoy_change = float((current_amount - last_year_amount) / last_year_amount * 100)
+
+        utility_breakdown.append(UtilityBreakdown(
+            category=util_cat,
+            current_month=current_amount,
+            rolling_avg_3m=rolling_avg_3m,
+            rolling_avg_12m=rolling_avg_12m,
+            year_over_year_change=yoy_change
+        ))
+
+    # Build 12-month cash flow history
+    cash_flow_history = []
+    for i in range(11, -1, -1):
+        m = current_month - i
+        y = current_year
+        while m <= 0:
+            m += 12
+            y -= 1
+
+        month_income = Decimal("0.00")
+        month_expenses = Decimal("0.00")
+        month_utilities = Decimal("0.00")
+
+        for t in all_transactions:
+            if t.date.year == y and t.date.month == m:
+                amount = Decimal(str(t.amount))
+                if amount > 0:
+                    month_income += amount
+                else:
+                    month_expenses += abs(amount)
+                    if is_utility_category(t.category):
+                        month_utilities += abs(amount)
+
+        cash_flow_history.append(RentalCashFlow(
+            month=f"{y:04d}-{m:02d}",
+            income=month_income,
+            expenses=month_expenses,
+            net=month_income - month_expenses,
+            utilities_total=month_utilities
+        ))
+
+    # Year over year comparison
+    last_year_total_income = Decimal("0.00")
+    last_year_total_expenses = Decimal("0.00")
+    this_year_total_income = Decimal("0.00")
+    this_year_total_expenses = Decimal("0.00")
+
+    for t in all_transactions:
+        amount = Decimal(str(t.amount))
+        if t.date.year == current_year - 1:
+            if amount > 0:
+                last_year_total_income += amount
+            else:
+                last_year_total_expenses += abs(amount)
+        elif t.date.year == current_year:
+            if amount > 0:
+                this_year_total_income += amount
+            else:
+                this_year_total_expenses += abs(amount)
+
+    year_over_year = None
+    if last_year_total_income > 0 or last_year_total_expenses > 0:
+        year_over_year = {
+            "last_year": {
+                "income": float(last_year_total_income),
+                "expenses": float(last_year_total_expenses),
+                "net": float(last_year_total_income - last_year_total_expenses)
+            },
+            "this_year": {
+                "income": float(this_year_total_income),
+                "expenses": float(this_year_total_expenses),
+                "net": float(this_year_total_income - this_year_total_expenses)
+            }
+        }
+
+    return RentalAnalyticsResponse(
+        account_id=account.id,
+        account_name=account.name,
+        current_balance=current_balance,
+        monthly_cash_flow=monthly_income - monthly_expenses,
+        ytd_cash_flow=ytd_income - ytd_expenses,
+        utility_breakdown=utility_breakdown,
+        cash_flow_history=cash_flow_history,
+        year_over_year=year_over_year
     )
