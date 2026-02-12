@@ -5,6 +5,7 @@ import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Sidebar from '@/components/Sidebar';
 import UploadModal from '@/components/UploadModal';
+import api from '@/lib/api';
 import Dashboard from '@/components/Dashboard';
 import Transactions from '@/components/Transactions';
 import Accounts from '@/components/Accounts';
@@ -26,6 +27,11 @@ export default function Home() {
   }, [status, router]);
 
   const handleUploadSuccess = () => {
+    setRefreshKey((prev) => prev + 1);
+  };
+
+  const handleRefreshData = async () => {
+    await api.refreshData();
     setRefreshKey((prev) => prev + 1);
   };
 
@@ -68,6 +74,7 @@ export default function Home() {
         selectedAccount={selectedAccount}
         onAccountChange={setSelectedAccount}
         onUploadClick={() => setIsUploadModalOpen(true)}
+        onRefreshClick={handleRefreshData}
         user={session?.user}
       />
 

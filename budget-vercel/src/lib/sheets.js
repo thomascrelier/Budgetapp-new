@@ -10,8 +10,46 @@ const SHEETS = {
   BUDGETS: 'Budgets',
 };
 
-// Get authenticated Google Sheets client
+// ============ IN-MEMORY CACHE ============
+
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+const cache = {
+  accounts: { data: null, timestamp: 0 },
+  transactions: { data: null, timestamp: 0 },
+  budgets: { data: null, timestamp: 0 },
+};
+
+function getCached(key) {
+  const entry = cache[key];
+  if (entry.data && (Date.now() - entry.timestamp) < CACHE_TTL_MS) {
+    return entry.data;
+  }
+  return null;
+}
+
+function setCache(key, data) {
+  cache[key] = { data, timestamp: Date.now() };
+}
+
+function invalidateCache(key) {
+  cache[key] = { data: null, timestamp: 0 };
+}
+
+export function clearCache() {
+  cache.accounts = { data: null, timestamp: 0 };
+  cache.transactions = { data: null, timestamp: 0 };
+  cache.budgets = { data: null, timestamp: 0 };
+  _sheetsClient = null;
+}
+
+// ============ AUTH (cached client) ============
+
+let _sheetsClient = null;
+
 async function getSheets() {
+  if (_sheetsClient) return _sheetsClient;
+
   const credentials = JSON.parse(process.env.GOOGLE_CREDENTIALS_JSON || '{}');
 
   const auth = new google.auth.GoogleAuth({
@@ -19,8 +57,8 @@ async function getSheets() {
     scopes: ['https://www.googleapis.com/auth/spreadsheets'],
   });
 
-  const sheets = google.sheets({ version: 'v4', auth });
-  return sheets;
+  _sheetsClient = google.sheets({ version: 'v4', auth });
+  return _sheetsClient;
 }
 
 // Initialize sheets with headers if they don't exist
@@ -98,7 +136,7 @@ export async function initializeSheets() {
 
 // ============ ACCOUNTS ============
 
-export async function getAccounts(includeInactive = false) {
+async function fetchAccountsFromSheets() {
   const sheets = await getSheets();
 
   const response = await sheets.spreadsheets.values.get({
@@ -111,15 +149,24 @@ export async function getAccounts(includeInactive = false) {
 
   const [headers, ...data] = rows;
 
-  return data
-    .map(row => ({
-      id: parseInt(row[0]) || 0,
-      name: row[1] || '',
-      account_type: row[2] || 'checking',
-      initial_balance: parseFloat(row[3]) || 0,
-      is_active: row[4] !== 'false',
-      created_at: row[5] || new Date().toISOString(),
-    }))
+  return data.map(row => ({
+    id: parseInt(row[0]) || 0,
+    name: row[1] || '',
+    account_type: row[2] || 'checking',
+    initial_balance: parseFloat(row[3]) || 0,
+    is_active: row[4] !== 'false',
+    created_at: row[5] || new Date().toISOString(),
+  }));
+}
+
+export async function getAccounts(includeInactive = false) {
+  let allAccounts = getCached('accounts');
+  if (!allAccounts) {
+    allAccounts = await fetchAccountsFromSheets();
+    setCache('accounts', allAccounts);
+  }
+
+  return allAccounts
     .filter(account => includeInactive || account.is_active)
     .sort((a, b) => a.name.localeCompare(b.name));
 }
@@ -162,6 +209,8 @@ export async function createAccount(data) {
     },
   });
 
+  invalidateCache('accounts');
+
   return {
     id: newId,
     name: data.name,
@@ -175,7 +224,7 @@ export async function createAccount(data) {
 export async function initializeDefaultAccounts() {
   const defaultAccounts = [
     { name: 'Main Chequing', account_type: 'checking', initial_balance: 0 },
-    { name: 'Rental Property', account_type: 'checking', initial_balance: 0 },
+    { name: 'CIBC Rental', account_type: 'checking', initial_balance: 0 },
     { name: 'Visa Credit Card', account_type: 'credit_card', initial_balance: 0 },
   ];
 
@@ -197,7 +246,7 @@ export async function initializeDefaultAccounts() {
 
 // ============ TRANSACTIONS ============
 
-export async function getTransactions(filters = {}) {
+async function fetchTransactionsFromSheets() {
   const sheets = await getSheets();
 
   const response = await sheets.spreadsheets.values.get({
@@ -206,11 +255,11 @@ export async function getTransactions(filters = {}) {
   });
 
   const rows = response.data.values || [];
-  if (rows.length <= 1) return { transactions: [], total: 0 };
+  if (rows.length <= 1) return [];
 
   const [headers, ...data] = rows;
 
-  let transactions = data.map((row, index) => ({
+  return data.map((row, index) => ({
     id: parseInt(row[0]) || index + 1,
     account_id: parseInt(row[1]) || 0,
     date: row[2] || '',
@@ -221,6 +270,16 @@ export async function getTransactions(filters = {}) {
     import_batch_id: row[7] || '',
     created_at: row[8] || '',
   }));
+}
+
+export async function getTransactions(filters = {}) {
+  let allTransactions = getCached('transactions');
+  if (!allTransactions) {
+    allTransactions = await fetchTransactionsFromSheets();
+    setCache('transactions', allTransactions);
+  }
+
+  let transactions = [...allTransactions];
 
   // Apply filters
   if (filters.account_id) {
@@ -250,8 +309,12 @@ export async function getTransactions(filters = {}) {
 }
 
 export async function getAllTransactions() {
-  const { transactions } = await getTransactions({ limit: 100000 });
-  return transactions;
+  let allTransactions = getCached('transactions');
+  if (!allTransactions) {
+    allTransactions = await fetchTransactionsFromSheets();
+    setCache('transactions', allTransactions);
+  }
+  return allTransactions;
 }
 
 export async function createTransactions(transactionsData) {
@@ -282,6 +345,8 @@ export async function createTransactions(transactionsData) {
     });
   }
 
+  invalidateCache('transactions');
+
   return rows.length;
 }
 
@@ -309,12 +374,14 @@ export async function updateTransactionCategory(id, category) {
     requestBody: { values: [[category]] },
   });
 
+  invalidateCache('transactions');
+
   return { success: true };
 }
 
 // ============ BUDGETS ============
 
-export async function getBudgets() {
+async function fetchBudgetsFromSheets() {
   const sheets = await getSheets();
 
   const response = await sheets.spreadsheets.values.get({
@@ -327,16 +394,23 @@ export async function getBudgets() {
 
   const [headers, ...data] = rows;
 
-  return data
-    .map(row => ({
-      id: parseInt(row[0]) || 0,
-      category_name: row[1] || '',
-      monthly_limit: parseFloat(row[2]) || 0,
-      alert_threshold: parseFloat(row[3]) || 80,
-      is_active: row[4] !== 'false',
-      created_at: row[5] || '',
-    }))
-    .filter(b => b.is_active);
+  return data.map(row => ({
+    id: parseInt(row[0]) || 0,
+    category_name: row[1] || '',
+    monthly_limit: parseFloat(row[2]) || 0,
+    alert_threshold: parseFloat(row[3]) || 80,
+    is_active: row[4] !== 'false',
+    created_at: row[5] || '',
+  }));
+}
+
+export async function getBudgets() {
+  let allBudgets = getCached('budgets');
+  if (!allBudgets) {
+    allBudgets = await fetchBudgetsFromSheets();
+    setCache('budgets', allBudgets);
+  }
+  return allBudgets.filter(b => b.is_active);
 }
 
 export async function createBudget(data) {
@@ -361,6 +435,8 @@ export async function createBudget(data) {
       ]],
     },
   });
+
+  invalidateCache('budgets');
 
   return {
     id: newId,

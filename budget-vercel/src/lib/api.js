@@ -69,6 +69,9 @@ export const api = {
     return fetch(`${API_BASE}/analytics/rental-property?${searchParams}`).then(r => r.json());
   },
 
+  // Cache
+  refreshData: () => fetch(`${API_BASE}/cache/refresh`, { method: 'POST' }).then(r => r.json()),
+
   // Upload
   uploadCSV: async (file, accountId) => {
     const formData = new FormData();

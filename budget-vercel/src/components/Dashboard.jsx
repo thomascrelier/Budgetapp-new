@@ -94,7 +94,7 @@ export default function Dashboard({ selectedAccount }) {
 
       {/* Account Balance Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {['Main Chequing', 'Rental Property', 'Visa Credit Card'].map((accountName) => {
+        {['Main Chequing', 'CIBC Rental', 'Visa Credit Card'].map((accountName) => {
           const account = accounts.find(a => a.name === accountName);
           const balance = account ? parseFloat(account.current_balance) : 0;
           const isCredit = accountName.toLowerCase().includes('credit');
