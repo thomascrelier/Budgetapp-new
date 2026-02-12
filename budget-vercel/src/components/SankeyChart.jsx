@@ -18,7 +18,6 @@ export default function SankeyChart({ data, width = 800, height = 400 }) {
     if (!data || !data.nodes.length || !data.links.length) return { nodes: [], links: [] };
 
     const sankeyLayout = sankey()
-      .nodeId((d) => d.index)
       .nodeWidth(20)
       .nodePadding(16)
       .nodeAlign(sankeyJustify)
