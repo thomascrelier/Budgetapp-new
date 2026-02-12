@@ -16,8 +16,10 @@ import {
   Pie,
   Cell,
 } from 'recharts';
+import dynamic from 'next/dynamic';
 import api from '@/lib/api';
-import SankeyChart from './SankeyChart';
+
+const SankeyChart = dynamic(() => import('./SankeyChart'), { ssr: false });
 
 const COLORS = ['#171717', '#525252', '#737373', '#A3A3A3', '#D4D4D4', '#E5E5E5', '#404040', '#262626'];
 
