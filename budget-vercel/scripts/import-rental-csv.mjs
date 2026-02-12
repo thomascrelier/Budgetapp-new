@@ -14,8 +14,13 @@ import { readFileSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { google } from 'googleapis';
-import Database from 'better-sqlite3';
+import { createRequire } from 'module';
 import dotenv from 'dotenv';
+
+// better-sqlite3 is installed locally (npm install better-sqlite3) but not in package.json
+// to avoid breaking Vercel builds with native modules
+const require = createRequire(import.meta.url);
+const Database = require('better-sqlite3');
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = resolve(__dirname, '../..');
