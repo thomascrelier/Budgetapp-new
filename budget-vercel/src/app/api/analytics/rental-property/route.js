@@ -2,6 +2,10 @@ import { NextResponse } from 'next/server';
 import { getAllTransactions, getAccountByName } from '@/lib/sheets';
 
 // CRA T776 Rental Income Tax Form groupings
+// Tenant utility tracking constants
+const BRANDON_BASE_RENT = 2050;
+const MADISON_MAX_UTILITY = 500; // Madison pays rent via Chexy; direct e-transfers over this are rent, not utilities
+
 const T776_GROUPS = [
   { name: 'Gross Rental Income', categories: ['Rental Income'], isIncome: true },
   { name: 'Mortgage', categories: ['Mortgage'], isIncome: false },
@@ -182,7 +186,6 @@ function buildCategoryBreakdown(selectedTotals, prevTotals, allCategories) {
 
 function buildUtilityTracker(allRentalTxns, year) {
   const UTILITY_CATEGORIES = ['Electricity', 'Gas', 'Water'];
-  const BRANDON_BASE_RENT = 2050;
 
   // Collect utility bills by month and tenant payments by month
   // We need data from the year AND the first month of next year (for the last month's matching)
@@ -208,7 +211,11 @@ function buildUtilityTracker(allRentalTxns, year) {
         const contribution = Math.max(0, tx.amount - BRANDON_BASE_RENT);
         paymentsByMonth[month].brandon += contribution;
       } else if (desc.includes('madison')) {
-        paymentsByMonth[month].madison += tx.amount;
+        // Only count small e-transfers as utility contributions;
+        // large amounts (e.g. $2,450) are rent payments, not utilities
+        if (tx.amount <= MADISON_MAX_UTILITY) {
+          paymentsByMonth[month].madison += tx.amount;
+        }
       }
     }
   }
@@ -281,6 +288,7 @@ export async function GET(request) {
         prev_monthly_data: [],
         category_breakdown: [],
         t776_pie_data: [],
+        utility_tracker: [],
       });
     }
 

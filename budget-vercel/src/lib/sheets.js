@@ -294,6 +294,10 @@ export async function getTransactions(filters = {}) {
   if (filters.end_date) {
     transactions = transactions.filter(t => t.date <= filters.end_date);
   }
+  if (filters.search) {
+    const term = filters.search.toLowerCase();
+    transactions = transactions.filter(t => t.description.toLowerCase().includes(term));
+  }
 
   // Sort by date descending
   transactions.sort((a, b) => b.date.localeCompare(a.date));
@@ -306,6 +310,9 @@ export async function getTransactions(filters = {}) {
     account_name: accountMap[t.account_id] || 'Unknown',
   }));
 
+  // Collect unique categories from all transactions (before pagination)
+  const categories = [...new Set(transactions.map(t => t.category).filter(Boolean))].sort();
+
   // Pagination
   const skip = filters.skip || 0;
   const limit = filters.limit || 50;
@@ -313,6 +320,7 @@ export async function getTransactions(filters = {}) {
   return {
     transactions: transactions.slice(skip, skip + limit),
     total: transactions.length,
+    categories,
   };
 }
 

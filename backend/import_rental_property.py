@@ -22,8 +22,9 @@ DB_PATH = "/Users/thomas.crelier/Desktop/Claude/Budget/backend/budgetcsv.db"
 
 # Specific description patterns (checked first, case-insensitive)
 CATEGORY_RULES = [
+    # Mortgage
+    ("MORTGAGE PAYMENT", "Mortgage"),
     # Utilities & recurring
-    ("MORTGAGE PAYMENT", "Housing"),
     ("Hydro One", "Electricity"),
     ("ENBRIDGE", "Gas"),
     ("Tax Pmt Town of Caledon", "Property Tax"),
@@ -33,13 +34,14 @@ CATEGORY_RULES = [
     ("SERVICE CHARGE", "Fees & Charges"),
     ("CRA (REVENUE", "Income Tax"),
 
-    # Maintenance & repairs
-    ("Bobby HVAC", "Housing"),
-    ("Josh Carnackie", "Housing"),
-    ("alex all mighty", "Housing"),
-    ("Adam Apex", "Housing"),
-    ("Deborah hall", "Housing"),
-    ("One-time contact", "Housing"),
+    # Repairs & maintenance
+    ("Bobby HVAC", "Repairs & Maintenance"),
+    ("Josh Carnackie", "Repairs & Maintenance"),
+    ("alex all mighty", "Repairs & Maintenance"),
+    ("Adam Apex", "Repairs & Maintenance"),
+    ("Deborah hall", "Repairs & Maintenance"),
+    ("One-time contact", "Repairs & Maintenance"),
+    ("HOME DEPOT", "Repairs & Maintenance"),
 
     # Renovation contractors
     ("mike construction", "Renovations"),
@@ -219,16 +221,16 @@ def main():
                 recategorize_count += updated
                 print(f"  '{pattern}' → Renovations: {updated} transactions")
 
-        # Bobby HVAC → Housing (across all accounts except new)
+        # Bobby HVAC → Repairs & Maintenance (across all accounts except new)
         cursor.execute(
-            """UPDATE transactions SET category = 'Housing'
-               WHERE UPPER(description) LIKE '%BOBBY HVAC%' AND account_id != ? AND category != 'Housing'""",
+            """UPDATE transactions SET category = 'Repairs & Maintenance'
+               WHERE UPPER(description) LIKE '%BOBBY HVAC%' AND account_id != ? AND category != 'Repairs & Maintenance'""",
             (new_account_id,),
         )
         updated = cursor.rowcount
         if updated:
             recategorize_count += updated
-            print(f"  'Bobby HVAC' → Housing: {updated} transactions")
+            print(f"  'Bobby HVAC' → Repairs & Maintenance: {updated} transactions")
 
         # Other 1 HOUSE: Utilities & Bills with PEEL → Water
         cursor.execute(

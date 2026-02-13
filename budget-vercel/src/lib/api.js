@@ -21,6 +21,7 @@ export const api = {
     if (params.category) searchParams.set('category', params.category);
     if (params.start_date) searchParams.set('start_date', params.start_date);
     if (params.end_date) searchParams.set('end_date', params.end_date);
+    if (params.search) searchParams.set('search', params.search);
     if (params.skip) searchParams.set('skip', params.skip);
     if (params.limit) searchParams.set('limit', params.limit);
     return fetch(`${API_BASE}/transactions?${searchParams}`).then(r => r.json());

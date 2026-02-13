@@ -10,6 +10,7 @@ export async function GET(request) {
       category: searchParams.get('category'),
       start_date: searchParams.get('start_date'),
       end_date: searchParams.get('end_date'),
+      search: searchParams.get('search'),
       skip: parseInt(searchParams.get('skip')) || 0,
       limit: parseInt(searchParams.get('limit')) || 50,
     };

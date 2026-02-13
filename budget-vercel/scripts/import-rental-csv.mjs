@@ -38,7 +38,7 @@ const CREDENTIALS = JSON.parse((process.env.GOOGLE_CREDENTIALS_JSON || '{}').tri
 // ============ Category Rules ============
 
 const CATEGORY_RULES = [
-  ['MORTGAGE PAYMENT', 'Housing'],
+  ['MORTGAGE PAYMENT', 'Mortgage'],
   ['Hydro One', 'Electricity'],
   ['ENBRIDGE', 'Gas'],
   ['Tax Pmt Town of Caledon', 'Property Tax'],
@@ -48,12 +48,13 @@ const CATEGORY_RULES = [
   ['SERVICE CHARGE', 'Fees & Charges'],
   ['CRA (REVENUE', 'Income Tax'],
 
-  ['Bobby HVAC', 'Housing'],
-  ['Josh Carnackie', 'Housing'],
-  ['alex all mighty', 'Housing'],
-  ['Adam Apex', 'Housing'],
-  ['Deborah hall', 'Housing'],
-  ['One-time contact', 'Housing'],
+  ['Bobby HVAC', 'Repairs & Maintenance'],
+  ['Josh Carnackie', 'Repairs & Maintenance'],
+  ['alex all mighty', 'Repairs & Maintenance'],
+  ['Adam Apex', 'Repairs & Maintenance'],
+  ['Deborah hall', 'Repairs & Maintenance'],
+  ['One-time contact', 'Repairs & Maintenance'],
+  ['HOME DEPOT', 'Repairs & Maintenance'],
 
   ['mike construction', 'Renovations'],
   ['Kosta Electri', 'Renovations'],
