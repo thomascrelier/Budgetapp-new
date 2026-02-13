@@ -57,6 +57,11 @@ CATEGORY_RULES = [
 
     # Utilities
     ("TORONTO HYDRO", "Utilities"),
+    ("FIDO Mobile", "Mobile"),
+
+    # Reimbursements (not income)
+    ("Nichole de Gouw", "Transfer"),
+    ("NICHOLE M DE GOUW", "Transfer"),
 
     # Fees
     ("SERVICE CHARGE", "Fees & Charges"),

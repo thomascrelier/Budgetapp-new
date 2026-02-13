@@ -37,8 +37,8 @@ export async function GET(request) {
 
       for (const t of monthTransactions) {
         const isNonSpending = NON_SPENDING_CATEGORIES.includes(t.category);
-        if (t.amount > 0) income += t.amount;
-        else if (!isNonSpending) expenses += Math.abs(t.amount);
+        if (t.amount > 0 && !isNonSpending) income += t.amount;
+        else if (t.amount < 0 && !isNonSpending) expenses += Math.abs(t.amount);
       }
 
       data.push({

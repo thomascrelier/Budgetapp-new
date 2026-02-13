@@ -50,12 +50,13 @@ CATEGORY_RULES = [
 
     # Healthcare (split)
     ("SHOPPERS DRUG MART", "Pharmacy"),
-    ("PARK LAWN HEALTH", "Medical"),
+    ("PARK LAWN HEALTH", "Dentist"),
     ("ANIMAL HOSPITAL", "Veterinary"),
     ("JODI ROUAH", "Therapy"),
 
-    # Utilities
-    ("ROGERS", "Utilities"),
+    # Mobile
+    ("ROGERS", "Mobile"),
+    ("FIDO", "Mobile"),
 
     # Insurance
     ("INTACT INSURANCE", "Insurance"),

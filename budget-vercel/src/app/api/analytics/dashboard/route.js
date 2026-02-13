@@ -40,8 +40,8 @@ export async function GET(request) {
     let monthlySpending = 0;
     for (const t of monthTransactions) {
       const isNonSpending = NON_SPENDING_CATEGORIES.includes(t.category);
-      if (t.amount > 0) monthlyIncome += t.amount;
-      else if (!isNonSpending) monthlySpending += Math.abs(t.amount);
+      if (t.amount > 0 && !isNonSpending) monthlyIncome += t.amount;
+      else if (t.amount < 0 && !isNonSpending) monthlySpending += Math.abs(t.amount);
     }
 
     // Calculate spending by category for budget alerts
