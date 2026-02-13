@@ -48,11 +48,11 @@ CATEGORY_RULES = [
     # Travel
     ("AIR CAN", "Travel"),
 
-    # Healthcare
-    ("SHOPPERS DRUG MART", "Healthcare"),
-    ("PARK LAWN HEALTH", "Healthcare"),
-    ("ANIMAL HOSPITAL", "Healthcare"),
-    ("JODI ROUAH", "Healthcare"),
+    # Healthcare (split)
+    ("SHOPPERS DRUG MART", "Pharmacy"),
+    ("PARK LAWN HEALTH", "Medical"),
+    ("ANIMAL HOSPITAL", "Veterinary"),
+    ("JODI ROUAH", "Therapy"),
 
     # Utilities
     ("ROGERS", "Utilities"),

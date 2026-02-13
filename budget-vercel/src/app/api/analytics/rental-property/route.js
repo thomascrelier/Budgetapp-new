@@ -221,7 +221,7 @@ function buildCategoryBreakdown(selectedTotals, prevTotals, allCategories) {
   return breakdown;
 }
 
-function buildUtilityTracker(allRentalTxns, year) {
+function buildUtilityTracker(allRentalTxns) {
   const UTILITY_CATEGORIES = ['Electricity', 'Gas', 'Water'];
 
   // Collect utility bills by month and tenant payments by month
@@ -257,10 +257,8 @@ function buildUtilityTracker(allRentalTxns, year) {
     }
   }
 
-  // Build tracker rows: only months in the selected year that have utility bills
-  const months = Object.keys(utilityByMonth)
-    .filter(m => m.startsWith(String(year)))
-    .sort();
+  // Build tracker rows: all months with utility bills (continuous across years)
+  const months = Object.keys(utilityByMonth).sort();
 
   let runningBalance = 0;
   let prevMonthWater = 0; // water billed last month, recovered this month
@@ -371,7 +369,7 @@ export async function GET(request) {
       t776_pie_data: t776Summary
         .filter(g => !g.is_income && g.selected_year_total > 0)
         .map(g => ({ name: g.group_name, value: g.selected_year_total })),
-      utility_tracker: buildUtilityTracker(allRentalTxns, year),
+      utility_tracker: buildUtilityTracker(allRentalTxns),
     });
   } catch (error) {
     console.error('Error fetching rental property analytics:', error);
