@@ -5,6 +5,7 @@ import { getAllTransactions, getAccountByName } from '@/lib/sheets';
 // Tenant utility tracking constants
 const BRANDON_BASE_RENT = 2050;
 const MADISON_MAX_UTILITY = 500; // Madison pays rent via Chexy; direct e-transfers over this are rent, not utilities
+const UTILITY_TRACKING_START = '2025-10'; // Tenant utility recovery arrangement started Oct 2025
 
 const T776_GROUPS = [
   { name: 'Gross Rental Income', categories: ['Rental Income'], isIncome: true },
@@ -257,8 +258,8 @@ function buildUtilityTracker(allRentalTxns) {
     }
   }
 
-  // Build tracker rows: all months with utility bills (continuous across years)
-  const months = Object.keys(utilityByMonth).sort();
+  // Build tracker rows: only from the start of the utility recovery arrangement
+  const months = Object.keys(utilityByMonth).filter(m => m >= UTILITY_TRACKING_START).sort();
 
   let runningBalance = 0;
   let prevMonthWater = 0; // water billed last month, recovered this month
