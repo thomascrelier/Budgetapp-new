@@ -68,6 +68,43 @@ function buildMonthlyData(year, txns) {
   return monthly;
 }
 
+function buildContinuousMonthlyData(txns) {
+  if (txns.length === 0) return [];
+
+  // Find date range from transactions
+  const dates = txns.map(t => t.date).sort();
+  const [startYear, startMonth] = dates[0].split('-').map(Number);
+  const now = new Date();
+  const endYear = now.getFullYear();
+  const endMonth = now.getMonth() + 1;
+
+  const monthly = [];
+  for (let y = startYear; y <= endYear; y++) {
+    const mStart = y === startYear ? startMonth : 1;
+    const mEnd = y === endYear ? endMonth : 12;
+    for (let m = mStart; m <= mEnd; m++) {
+      const monthStr = `${y}-${String(m).padStart(2, '0')}`;
+      const monthTxns = txns.filter(t => t.date.startsWith(monthStr));
+
+      let income = 0;
+      let expenses = 0;
+      for (const t of monthTxns) {
+        if (t.amount > 0) income += t.amount;
+        else expenses += Math.abs(t.amount);
+      }
+
+      monthly.push({
+        month: monthStr,
+        label: new Date(y, m - 1).toLocaleString('en-US', { month: 'short', year: '2-digit' }),
+        income: Math.round(income * 100) / 100,
+        expenses: Math.round(expenses * 100) / 100,
+        net: Math.round((income - expenses) * 100) / 100,
+      });
+    }
+  }
+  return monthly;
+}
+
 function buildCategoryToGroupMap(allCategories) {
   const map = {};
   const knownCategories = new Set();
@@ -226,23 +263,28 @@ function buildUtilityTracker(allRentalTxns, year) {
     .sort();
 
   let runningBalance = 0;
+  let prevMonthWater = 0; // water billed last month, recovered this month
   const tracker = [];
 
   for (const month of months) {
     const u = utilityByMonth[month];
     const totalBilled = Math.round((u.electricity + u.gas + u.water) * 100) / 100;
 
-    // Tenants pay same month as the bill arrives (0 offset).
-    // Elec+gas is recovered same month; water (quarterly) recovery is bundled
-    // into the next month's rent, so the running balance dips on water months
-    // and recovers the following month — this is expected behaviour.
+    // Elec+gas is recovered same month; water (quarterly) is recovered the
+    // following month.  So "expected recovery" for this month =
+    //   same-month elec+gas  +  previous month's water bill.
+    const expectedRecovery = Math.round((u.electricity + u.gas + prevMonthWater) * 100) / 100;
+
     const payments = paymentsByMonth[month] || { brandon: 0, madison: 0 };
     const totalCollected = Math.round((payments.brandon + payments.madison) * 100) / 100;
-    const delta = Math.round((totalCollected - totalBilled) * 100) / 100;
+    const delta = Math.round((totalCollected - expectedRecovery) * 100) / 100;
     runningBalance = Math.round((runningBalance + delta) * 100) / 100;
 
-    // Pending if no payments received yet
-    const pending = totalCollected === 0 && totalBilled > 0;
+    // Carry this month's water forward for next month's expected recovery
+    prevMonthWater = u.water;
+
+    // Pending if expected recovery > 0 but nothing collected yet
+    const pending = totalCollected === 0 && expectedRecovery > 0;
 
     const [y, m] = month.split('-').map(Number);
     const monthDate = new Date(y, m - 1);
@@ -255,6 +297,7 @@ function buildUtilityTracker(allRentalTxns, year) {
       gas: Math.round(u.gas * 100) / 100,
       water: Math.round(u.water * 100) / 100,
       total_billed: totalBilled,
+      expected_recovery: expectedRecovery,
       brandon_contribution: Math.round(payments.brandon * 100) / 100,
       madison_contribution: Math.round(payments.madison * 100) / 100,
       total_collected: totalCollected,
@@ -291,8 +334,15 @@ export async function GET(request) {
       });
     }
 
+    // Also pull rental-categorized transactions from credit card
+    const visaAccount = await getAccountByName('CIBC Visa');
+    const RENTAL_CATEGORIES = ['Internet', 'Repairs & Maintenance', 'Electricity', 'Gas', 'Water', 'Property Tax', 'Mortgage', 'Rental Income', 'Insurance', 'Fees & Charges', 'Renovations', 'Income Tax'];
+
     const transactions = await getAllTransactions();
-    const allRentalTxns = transactions.filter(t => t.account_id === rentalAccount.id);
+    const allRentalTxns = transactions.filter(t =>
+      t.account_id === rentalAccount.id ||
+      (visaAccount && t.account_id === visaAccount.id && RENTAL_CATEGORIES.includes(t.category))
+    );
     const selectedYearTxns = allRentalTxns.filter(t => t.date.startsWith(String(year)));
     const prevYearTxns = allRentalTxns.filter(t => t.date.startsWith(String(prevYear)));
 
