@@ -232,20 +232,19 @@ function buildUtilityTracker(allRentalTxns, year) {
     const u = utilityByMonth[month];
     const totalBilled = Math.round((u.electricity + u.gas + u.water) * 100) / 100;
 
-    // Payments come the following month
-    const [y, m] = month.split('-').map(Number);
-    const nextMonth = m === 12
-      ? `${y + 1}-01`
-      : `${y}-${String(m + 1).padStart(2, '0')}`;
-
-    const payments = paymentsByMonth[nextMonth] || { brandon: 0, madison: 0 };
+    // Tenants pay same month as the bill arrives (0 offset).
+    // Elec+gas is recovered same month; water (quarterly) recovery is bundled
+    // into the next month's rent, so the running balance dips on water months
+    // and recovers the following month — this is expected behaviour.
+    const payments = paymentsByMonth[month] || { brandon: 0, madison: 0 };
     const totalCollected = Math.round((payments.brandon + payments.madison) * 100) / 100;
     const delta = Math.round((totalCollected - totalBilled) * 100) / 100;
     runningBalance = Math.round((runningBalance + delta) * 100) / 100;
 
-    // Pending if no payments received for next month yet
+    // Pending if no payments received yet
     const pending = totalCollected === 0 && totalBilled > 0;
 
+    const [y, m] = month.split('-').map(Number);
     const monthDate = new Date(y, m - 1);
     const monthLabel = monthDate.toLocaleString('en-US', { month: 'short', year: 'numeric' });
 

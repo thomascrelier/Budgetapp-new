@@ -315,7 +315,7 @@ export default function RentalProperty() {
         <div className="bg-surface rounded-xl shadow-sm border border-border overflow-hidden">
           <div className="px-6 py-4 border-b border-border">
             <h2 className="text-lg font-bold text-text-primary">Tenant Utility Recovery</h2>
-            <p className="text-text-tertiary text-sm mt-1">Utilities billed ~20th, recovered from tenants the following month</p>
+            <p className="text-text-tertiary text-sm mt-1">Elec & gas recovered same month; water (quarterly) recovered following month</p>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full">
