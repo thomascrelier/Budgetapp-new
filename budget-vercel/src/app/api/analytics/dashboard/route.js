@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { getAccountsWithBalances, getAllTransactions, getBudgets } from '@/lib/sheets';
 
+// Categories that represent money movement, not actual spending
+const NON_SPENDING_CATEGORIES = ['Transfer', 'Transfers & Payments', 'Investments'];
+
 export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url);
@@ -36,14 +39,15 @@ export async function GET(request) {
     let monthlyIncome = 0;
     let monthlySpending = 0;
     for (const t of monthTransactions) {
+      const isNonSpending = NON_SPENDING_CATEGORIES.includes(t.category);
       if (t.amount > 0) monthlyIncome += t.amount;
-      else monthlySpending += Math.abs(t.amount);
+      else if (!isNonSpending) monthlySpending += Math.abs(t.amount);
     }
 
     // Calculate spending by category for budget alerts
     const spendingByCategory = {};
     for (const t of monthTransactions) {
-      if (t.amount < 0) {
+      if (t.amount < 0 && !NON_SPENDING_CATEGORIES.includes(t.category)) {
         const cat = t.category || 'Uncategorized';
         spendingByCategory[cat] = (spendingByCategory[cat] || 0) + Math.abs(t.amount);
       }
