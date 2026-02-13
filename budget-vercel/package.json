@@ -9,7 +9,6 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "d3-sankey": "^0.12.3",
     "googleapis": "^131.0.0",
     "next": "^16.1.4",
     "next-auth": "^4.24.13",
