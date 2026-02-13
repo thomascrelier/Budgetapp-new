@@ -21,6 +21,17 @@ import api from '@/lib/api';
 
 const SankeyChart = dynamic(() => import('./SankeyChart'), { ssr: false });
 
+class SankeyErrorBoundary extends React.Component {
+  state = { hasError: false };
+  static getDerivedStateFromError() { return { hasError: true }; }
+  render() {
+    if (this.state.hasError) return (
+      <p className="text-text-tertiary text-sm">Unable to load income flow diagram</p>
+    );
+    return this.props.children;
+  }
+}
+
 const COLORS = ['#171717', '#525252', '#737373', '#A3A3A3', '#D4D4D4', '#E5E5E5', '#404040', '#262626'];
 
 const tooltipStyle = {
@@ -404,7 +415,9 @@ export default function RentalProperty() {
       {sankeyData && (
         <div className="bg-surface rounded-xl shadow-sm border border-border p-6">
           <h2 className="text-lg font-bold text-text-primary mb-4">Income Flow</h2>
-          <SankeyChart data={sankeyData} width={800} height={400} />
+          <SankeyErrorBoundary>
+            <SankeyChart data={sankeyData} width={800} height={400} />
+          </SankeyErrorBoundary>
         </div>
       )}
 
