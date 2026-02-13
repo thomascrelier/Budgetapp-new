@@ -4,9 +4,10 @@ import { getAllTransactions, getAccountByName } from '@/lib/sheets';
 // CRA T776 Rental Income Tax Form groupings
 const T776_GROUPS = [
   { name: 'Gross Rental Income', categories: ['Rental Income'], isIncome: true },
+  { name: 'Mortgage', categories: ['Mortgage'], isIncome: false },
   { name: 'Property Taxes', categories: ['Property Tax'], isIncome: false },
   { name: 'Insurance', categories: ['Insurance'], isIncome: false },
-  { name: 'Repairs & Maintenance', categories: ['Housing', 'Renovations', 'Maintenance'], isIncome: false },
+  { name: 'Repairs & Maintenance', categories: ['Repairs & Maintenance', 'Renovations'], isIncome: false },
   { name: 'Utilities', categories: ['Electricity', 'Gas', 'Water', 'Internet'], isIncome: false },
   { name: 'Management & Admin', categories: ['Fees & Charges'], isIncome: false },
   { name: 'Other Expenses', categories: ['Income Tax', 'Transfers & Payments', 'Other', 'Uncategorized'], isIncome: false },
@@ -179,6 +180,87 @@ function buildCategoryBreakdown(selectedTotals, prevTotals, allCategories) {
   return breakdown;
 }
 
+function buildUtilityTracker(allRentalTxns, year) {
+  const UTILITY_CATEGORIES = ['Electricity', 'Gas', 'Water'];
+  const BRANDON_BASE_RENT = 2050;
+
+  // Collect utility bills by month and tenant payments by month
+  // We need data from the year AND the first month of next year (for the last month's matching)
+  const utilityByMonth = {};
+  const paymentsByMonth = {};
+
+  for (const tx of allRentalTxns) {
+    const month = tx.date.substring(0, 7); // YYYY-MM
+
+    // Utility expenses (negative amounts)
+    if (UTILITY_CATEGORIES.includes(tx.category) && tx.amount < 0) {
+      if (!utilityByMonth[month]) utilityByMonth[month] = { electricity: 0, gas: 0, water: 0 };
+      const cat = tx.category.toLowerCase();
+      utilityByMonth[month][cat] += Math.abs(tx.amount);
+    }
+
+    // Rental income - identify Brandon and Madison
+    if (tx.category === 'Rental Income' && tx.amount > 0) {
+      if (!paymentsByMonth[month]) paymentsByMonth[month] = { brandon: 0, madison: 0 };
+      const desc = tx.description.toLowerCase();
+      if (desc.includes('brandon')) {
+        // Brandon's utility contribution = amount over base rent
+        const contribution = Math.max(0, tx.amount - BRANDON_BASE_RENT);
+        paymentsByMonth[month].brandon += contribution;
+      } else if (desc.includes('madison')) {
+        paymentsByMonth[month].madison += tx.amount;
+      }
+    }
+  }
+
+  // Build tracker rows: only months in the selected year that have utility bills
+  const months = Object.keys(utilityByMonth)
+    .filter(m => m.startsWith(String(year)))
+    .sort();
+
+  let runningBalance = 0;
+  const tracker = [];
+
+  for (const month of months) {
+    const u = utilityByMonth[month];
+    const totalBilled = Math.round((u.electricity + u.gas + u.water) * 100) / 100;
+
+    // Payments come the following month
+    const [y, m] = month.split('-').map(Number);
+    const nextMonth = m === 12
+      ? `${y + 1}-01`
+      : `${y}-${String(m + 1).padStart(2, '0')}`;
+
+    const payments = paymentsByMonth[nextMonth] || { brandon: 0, madison: 0 };
+    const totalCollected = Math.round((payments.brandon + payments.madison) * 100) / 100;
+    const delta = Math.round((totalCollected - totalBilled) * 100) / 100;
+    runningBalance = Math.round((runningBalance + delta) * 100) / 100;
+
+    // Pending if no payments received for next month yet
+    const pending = totalCollected === 0 && totalBilled > 0;
+
+    const monthDate = new Date(y, m - 1);
+    const monthLabel = monthDate.toLocaleString('en-US', { month: 'short', year: 'numeric' });
+
+    tracker.push({
+      month,
+      month_label: monthLabel,
+      electricity: Math.round(u.electricity * 100) / 100,
+      gas: Math.round(u.gas * 100) / 100,
+      water: Math.round(u.water * 100) / 100,
+      total_billed: totalBilled,
+      brandon_contribution: Math.round(payments.brandon * 100) / 100,
+      madison_contribution: Math.round(payments.madison * 100) / 100,
+      total_collected: totalCollected,
+      delta,
+      running_balance: runningBalance,
+      pending,
+    });
+  }
+
+  return tracker;
+}
+
 export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url);
@@ -232,6 +314,7 @@ export async function GET(request) {
       t776_pie_data: t776Summary
         .filter(g => !g.is_income && g.selected_year_total > 0)
         .map(g => ({ name: g.group_name, value: g.selected_year_total })),
+      utility_tracker: buildUtilityTracker(allRentalTxns, year),
     });
   } catch (error) {
     console.error('Error fetching rental property analytics:', error);
