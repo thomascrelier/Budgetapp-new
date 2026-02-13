@@ -57,6 +57,15 @@ export default function RentalProperty() {
     }).format(value);
   };
 
+  const formatCurrencyDecimal = (value) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(value);
+  };
+
   const formatDelta = (dollars, percent) => {
     if (percent === null || percent === undefined) return 'New';
     const sign = dollars >= 0 ? '+' : '';
@@ -88,6 +97,7 @@ export default function RentalProperty() {
     prev_monthly_data = [],
     category_breakdown = [],
     t776_pie_data = [],
+    utility_tracker = [],
   } = data || {};
 
   // Merge monthly data for ComposedChart
@@ -294,6 +304,63 @@ export default function RentalProperty() {
                     )}
                   </td>
                 </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Tenant Utility Recovery */}
+      {utility_tracker.length > 0 && (
+        <div className="bg-surface rounded-xl shadow-sm border border-border overflow-hidden">
+          <div className="px-6 py-4 border-b border-border">
+            <h2 className="text-lg font-bold text-text-primary">Tenant Utility Recovery</h2>
+            <p className="text-text-tertiary text-sm mt-1">Utilities billed ~20th, recovered from tenants the following month</p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-background">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-text-secondary uppercase tracking-wider">Month</th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold text-text-secondary uppercase tracking-wider">Electricity</th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold text-text-secondary uppercase tracking-wider">Gas</th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold text-text-secondary uppercase tracking-wider">Water</th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold text-text-secondary uppercase tracking-wider">Total Bills</th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold text-text-secondary uppercase tracking-wider">Brandon (40%)</th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold text-text-secondary uppercase tracking-wider">Madison (60%)</th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold text-text-secondary uppercase tracking-wider">Collected</th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold text-text-secondary uppercase tracking-wider">Delta</th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold text-text-secondary uppercase tracking-wider">Running Bal.</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {utility_tracker.map((row) => {
+                  const deltaColor = row.pending ? 'text-amber-500' : row.delta < -2 ? 'text-negative' : row.delta > 2 ? 'text-positive' : 'text-text-secondary';
+                  const balColor = row.running_balance < -2 ? 'text-negative' : row.running_balance > 2 ? 'text-positive' : 'text-text-secondary';
+                  return (
+                    <tr key={row.month} className="hover:bg-surface-hover transition-colors">
+                      <td className="px-4 py-3 whitespace-nowrap font-medium text-text-primary">
+                        {row.month_label}
+                        {row.pending && (
+                          <span className="ml-2 text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">Pending</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-right text-text-secondary text-sm">{row.electricity > 0 ? formatCurrencyDecimal(row.electricity) : '—'}</td>
+                      <td className="px-4 py-3 text-right text-text-secondary text-sm">{row.gas > 0 ? formatCurrencyDecimal(row.gas) : '—'}</td>
+                      <td className="px-4 py-3 text-right text-text-secondary text-sm">{row.water > 0 ? formatCurrencyDecimal(row.water) : '—'}</td>
+                      <td className="px-4 py-3 text-right font-medium text-text-primary text-sm">{formatCurrencyDecimal(row.total_billed)}</td>
+                      <td className="px-4 py-3 text-right text-text-secondary text-sm">{row.pending ? '—' : formatCurrencyDecimal(row.brandon_contribution)}</td>
+                      <td className="px-4 py-3 text-right text-text-secondary text-sm">{row.pending ? '—' : formatCurrencyDecimal(row.madison_contribution)}</td>
+                      <td className="px-4 py-3 text-right font-medium text-text-primary text-sm">{row.pending ? '—' : formatCurrencyDecimal(row.total_collected)}</td>
+                      <td className={`px-4 py-3 text-right font-semibold text-sm ${deltaColor}`}>
+                        {row.pending ? 'Pending' : `${row.delta >= 0 ? '+' : ''}${formatCurrencyDecimal(row.delta)}`}
+                      </td>
+                      <td className={`px-4 py-3 text-right font-semibold text-sm ${balColor}`}>
+                        {row.pending ? '—' : `${row.running_balance >= 0 ? '+' : ''}${formatCurrencyDecimal(row.running_balance)}`}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
