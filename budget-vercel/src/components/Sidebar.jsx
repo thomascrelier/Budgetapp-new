@@ -1,14 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
 import { signOut } from 'next-auth/react';
-import api from '@/lib/api';
 
 const navItems = [
   { id: 'dashboard', label: 'Dashboard', icon: HomeIcon },
   { id: 'rental-property', label: 'Rental Property', icon: BuildingIcon },
   { id: 'transactions', label: 'Transactions', icon: ListIcon },
-  { id: 'accounts', label: 'Accounts', icon: WalletIcon },
   { id: 'budgets', label: 'Budget Settings', icon: SlidersIcon },
 ];
 
@@ -32,14 +29,6 @@ function ListIcon() {
   return (
     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
-    </svg>
-  );
-}
-
-function WalletIcon() {
-  return (
-    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
     </svg>
   );
 }
@@ -76,22 +65,7 @@ function RefreshIcon() {
   );
 }
 
-export default function Sidebar({ currentPage, onPageChange, selectedAccount, onAccountChange, onUploadClick, onRefreshClick, user, isOpen, onToggle }) {
-  const [accounts, setAccounts] = useState([]);
-
-  useEffect(() => {
-    loadAccounts();
-  }, []);
-
-  const loadAccounts = async () => {
-    try {
-      const data = await api.getAccounts();
-      setAccounts(data.accounts || []);
-    } catch (error) {
-      console.error('Failed to load accounts:', error);
-    }
-  };
-
+export default function Sidebar({ currentPage, onPageChange, onUploadClick, onRefreshClick, user, isOpen, onToggle }) {
   const handleNavClick = (pageId) => {
     onPageChange(pageId);
     // Close sidebar on mobile
@@ -158,23 +132,6 @@ export default function Sidebar({ currentPage, onPageChange, selectedAccount, on
             <RefreshIcon />
             Refresh Data
           </button>
-        </div>
-
-        {/* Account Selector */}
-        <div className="p-4 border-t border-neutral-700">
-          <label className="block text-sm text-neutral-400 mb-2">Filter by Account</label>
-          <select
-            value={selectedAccount || ''}
-            onChange={(e) => onAccountChange(e.target.value ? parseInt(e.target.value) : null)}
-            className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-white focus:border-transparent"
-          >
-            <option value="">All Accounts</option>
-            {accounts.map((account) => (
-              <option key={account.id} value={account.id}>
-                {account.name}
-              </option>
-            ))}
-          </select>
         </div>
 
         {/* User Profile & Sign Out */}
