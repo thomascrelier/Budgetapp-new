@@ -25,6 +25,7 @@ export default function Dashboard({ selectedAccount }) {
   const [balanceHistory, setBalanceHistory] = useState([]);
   const [accounts, setAccounts] = useState([]);
   const [selectedMonth, setSelectedMonth] = useState(null);
+  const [personalAccountIds, setPersonalAccountIds] = useState(null);
 
   useEffect(() => {
     loadData();
@@ -33,19 +34,29 @@ export default function Dashboard({ selectedAccount }) {
   const loadData = async () => {
     setLoading(true);
     try {
-      const accountIds = selectedAccount || null;
+      // Fetch accounts first to determine personal (non-rental) account IDs
+      const accountsRes = await api.getAccounts();
+      const allAccounts = accountsRes.accounts || [];
+      setAccounts(allAccounts);
 
-      const [dashboardRes, cashFlowRes, balanceRes, accountsRes] = await Promise.all([
+      // Exclude CIBC Rental from dashboard data
+      const personalIds = allAccounts
+        .filter(a => a.name !== 'CIBC Rental')
+        .map(a => a.id)
+        .join(',');
+      setPersonalAccountIds(personalIds || null);
+
+      let accountIds = selectedAccount || personalIds || null;
+
+      const [dashboardRes, cashFlowRes, balanceRes] = await Promise.all([
         api.getDashboard(accountIds),
         api.getCashFlow(6, accountIds),
-        api.getBalanceHistory(30, selectedAccount),
-        api.getAccounts(),
+        api.getBalanceHistory(30, accountIds),
       ]);
 
       setDashboard(dashboardRes);
       setCashFlow(cashFlowRes.data || []);
       setBalanceHistory(balanceRes.data || []);
-      setAccounts(accountsRes.accounts || []);
     } catch (error) {
       console.error('Failed to load dashboard data:', error);
     } finally {
@@ -88,7 +99,7 @@ export default function Dashboard({ selectedAccount }) {
     return (
       <MonthDetail
         month={selectedMonth}
-        selectedAccount={selectedAccount}
+        selectedAccount={selectedAccount || personalAccountIds}
         onBack={() => setSelectedMonth(null)}
       />
     );
@@ -109,11 +120,11 @@ export default function Dashboard({ selectedAccount }) {
       </div>
 
       {/* Account Balance Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        {['Main Chequing', 'CIBC Rental', 'CIBC Visa', 'Rogers Mastercard'].map((accountName) => {
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+        {['Main Chequing', 'CIBC Visa', 'Rogers Mastercard'].map((accountName) => {
           const account = accounts.find(a => a.name === accountName);
           const balance = account ? parseFloat(account.current_balance) : 0;
-          const isCredit = accountName.toLowerCase().includes('credit') || accountName.toLowerCase().includes('visa');
+          const isCredit = ['visa', 'credit', 'mastercard'].some(k => accountName.toLowerCase().includes(k));
 
           return (
             <div
@@ -136,10 +147,6 @@ export default function Dashboard({ selectedAccount }) {
                   {isCredit ? (
                     <svg className="w-6 h-6 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-                    </svg>
-                  ) : accountName.includes('Rental') ? (
-                    <svg className="w-6 h-6 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                     </svg>
                   ) : (
                     <svg className="w-6 h-6 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -226,7 +233,7 @@ export default function Dashboard({ selectedAccount }) {
         </div>
 
         {/* Spending Risk Tracker */}
-        <SpendingRiskTracker selectedAccount={selectedAccount} />
+        <SpendingRiskTracker selectedAccount={selectedAccount || personalAccountIds} />
       </div>
 
       {/* Balance History */}

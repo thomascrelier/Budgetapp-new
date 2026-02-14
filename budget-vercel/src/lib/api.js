@@ -58,10 +58,10 @@ export const api = {
     if (accountIds) searchParams.set('account_ids', accountIds);
     return fetch(`${API_BASE}/analytics/cash-flow?${searchParams}`).then(r => r.json());
   },
-  getBalanceHistory: (days = 30, accountId) => {
+  getBalanceHistory: (days = 30, accountIds) => {
     const searchParams = new URLSearchParams();
     searchParams.set('days', days);
-    if (accountId) searchParams.set('account_id', accountId);
+    if (accountIds) searchParams.set('account_ids', accountIds);
     return fetch(`${API_BASE}/analytics/balance-history?${searchParams}`).then(r => r.json());
   },
   getRentalProperty: (year) => {

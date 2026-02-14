@@ -6,13 +6,14 @@ export async function GET(request) {
     const { searchParams } = new URL(request.url);
     const days = parseInt(searchParams.get('days')) || 30;
     const accountId = searchParams.get('account_id');
+    const accountIdsParam = searchParams.get('account_ids');
 
     const [transactions, accounts] = await Promise.all([
       getAllTransactions(),
       getAccounts(),
     ]);
 
-    // Filter by account if specified
+    // Filter by account(s) if specified
     let filteredTransactions = transactions;
     let filteredAccounts = accounts;
 
@@ -20,6 +21,10 @@ export async function GET(request) {
       const id = parseInt(accountId);
       filteredTransactions = transactions.filter(t => t.account_id === id);
       filteredAccounts = accounts.filter(a => a.id === id);
+    } else if (accountIdsParam) {
+      const ids = accountIdsParam.split(',').map(Number);
+      filteredTransactions = transactions.filter(t => ids.includes(t.account_id));
+      filteredAccounts = accounts.filter(a => ids.includes(a.id));
     }
 
     // Calculate initial balance from filtered accounts
