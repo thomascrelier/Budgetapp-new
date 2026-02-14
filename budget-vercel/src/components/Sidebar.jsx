@@ -76,7 +76,7 @@ function RefreshIcon() {
   );
 }
 
-export default function Sidebar({ currentPage, onPageChange, selectedAccount, onAccountChange, onUploadClick, onRefreshClick, user }) {
+export default function Sidebar({ currentPage, onPageChange, selectedAccount, onAccountChange, onUploadClick, onRefreshClick, user, isOpen, onToggle }) {
   const [accounts, setAccounts] = useState([]);
 
   useEffect(() => {
@@ -92,102 +92,123 @@ export default function Sidebar({ currentPage, onPageChange, selectedAccount, on
     }
   };
 
+  const handleNavClick = (pageId) => {
+    onPageChange(pageId);
+    // Close sidebar on mobile
+    if (typeof window !== 'undefined' && window.innerWidth < 768) {
+      onToggle?.();
+    }
+  };
+
   return (
-    <div className="fixed left-0 top-0 h-full w-64 bg-text-primary text-white flex flex-col">
-      {/* Logo */}
-      <div className="p-6 border-b border-neutral-700">
-        <h1 className="text-xl font-bold">Budget Tracker</h1>
-        <p className="text-sm text-neutral-400 mt-1">Personal Finance</p>
-      </div>
+    <>
+      {/* Backdrop overlay (mobile only) */}
+      {isOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-30 md:hidden"
+          onClick={onToggle}
+        />
+      )}
 
-      {/* Navigation */}
-      <nav className="flex-1 p-4 space-y-1">
-        {navItems.map((item) => {
-          const Icon = item.icon;
-          const isActive = currentPage === item.id;
-          return (
-            <button
-              key={item.id}
-              onClick={() => onPageChange(item.id)}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-                isActive
-                  ? 'bg-white text-text-primary'
-                  : 'text-neutral-300 hover:bg-neutral-800 hover:text-white'
-              }`}
-            >
-              <Icon />
-              <span className="font-medium">{item.label}</span>
-            </button>
-          );
-        })}
-      </nav>
+      {/* Sidebar */}
+      <div className={`fixed left-0 top-0 h-full w-64 bg-text-primary text-white flex flex-col z-40 transform transition-transform duration-300 md:translate-x-0 ${
+        isOpen ? 'translate-x-0' : '-translate-x-full'
+      }`}>
+        {/* Logo */}
+        <div className="p-6 border-b border-neutral-700">
+          <h1 className="text-xl font-bold">Budget Tracker</h1>
+          <p className="text-sm text-neutral-400 mt-1">Personal Finance</p>
+        </div>
 
-      {/* Upload & Refresh Buttons */}
-      <div className="p-4 border-t border-neutral-700 space-y-2">
-        <button
-          onClick={onUploadClick}
-          className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-white text-text-primary rounded-lg font-medium hover:bg-neutral-100 transition-colors"
-        >
-          <UploadIcon />
-          Upload CSV
-        </button>
-        <button
-          onClick={onRefreshClick}
-          className="w-full flex items-center justify-center gap-2 px-4 py-2 text-neutral-300 border border-neutral-600 rounded-lg font-medium hover:bg-neutral-800 hover:text-white transition-colors"
-        >
-          <RefreshIcon />
-          Refresh Data
-        </button>
-      </div>
+        {/* Navigation */}
+        <nav className="flex-1 p-4 space-y-1">
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            const isActive = currentPage === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => handleNavClick(item.id)}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+                  isActive
+                    ? 'bg-white text-text-primary'
+                    : 'text-neutral-300 hover:bg-neutral-800 hover:text-white'
+                }`}
+              >
+                <Icon />
+                <span className="font-medium">{item.label}</span>
+              </button>
+            );
+          })}
+        </nav>
 
-      {/* Account Selector */}
-      <div className="p-4 border-t border-neutral-700">
-        <label className="block text-sm text-neutral-400 mb-2">Filter by Account</label>
-        <select
-          value={selectedAccount || ''}
-          onChange={(e) => onAccountChange(e.target.value ? parseInt(e.target.value) : null)}
-          className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-white focus:border-transparent"
-        >
-          <option value="">All Accounts</option>
-          {accounts.map((account) => (
-            <option key={account.id} value={account.id}>
-              {account.name}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {/* User Profile & Sign Out */}
-      {user && (
-        <div className="p-4 border-t border-neutral-700">
-          <div className="flex items-center gap-3">
-            {user.image ? (
-              <img
-                src={user.image}
-                alt={user.name || 'User'}
-                className="w-10 h-10 rounded-full"
-              />
-            ) : (
-              <div className="w-10 h-10 rounded-full bg-neutral-700 flex items-center justify-center">
-                <span className="text-lg font-medium">
-                  {user.name?.charAt(0) || user.email?.charAt(0) || '?'}
-                </span>
-              </div>
-            )}
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium truncate">{user.name}</p>
-              <p className="text-xs text-neutral-400 truncate">{user.email}</p>
-            </div>
-          </div>
+        {/* Upload & Refresh Buttons */}
+        <div className="p-4 border-t border-neutral-700 space-y-2">
           <button
-            onClick={() => signOut({ callbackUrl: '/login' })}
-            className="w-full mt-3 flex items-center justify-center gap-2 px-3 py-2 text-sm text-neutral-400 hover:text-white hover:bg-neutral-800 rounded-lg transition-colors"
+            onClick={onUploadClick}
+            className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-white text-text-primary rounded-lg font-medium hover:bg-neutral-100 transition-colors"
           >
-            <LogoutIcon />
-            Sign Out
+            <UploadIcon />
+            Upload CSV
+          </button>
+          <button
+            onClick={onRefreshClick}
+            className="w-full flex items-center justify-center gap-2 px-4 py-2 text-neutral-300 border border-neutral-600 rounded-lg font-medium hover:bg-neutral-800 hover:text-white transition-colors"
+          >
+            <RefreshIcon />
+            Refresh Data
           </button>
         </div>
-      )}
-    </div>
+
+        {/* Account Selector */}
+        <div className="p-4 border-t border-neutral-700">
+          <label className="block text-sm text-neutral-400 mb-2">Filter by Account</label>
+          <select
+            value={selectedAccount || ''}
+            onChange={(e) => onAccountChange(e.target.value ? parseInt(e.target.value) : null)}
+            className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-white focus:border-transparent"
+          >
+            <option value="">All Accounts</option>
+            {accounts.map((account) => (
+              <option key={account.id} value={account.id}>
+                {account.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* User Profile & Sign Out */}
+        {user && (
+          <div className="p-4 border-t border-neutral-700">
+            <div className="flex items-center gap-3">
+              {user.image ? (
+                <img
+                  src={user.image}
+                  alt={user.name || 'User'}
+                  className="w-10 h-10 rounded-full"
+                />
+              ) : (
+                <div className="w-10 h-10 rounded-full bg-neutral-700 flex items-center justify-center">
+                  <span className="text-lg font-medium">
+                    {user.name?.charAt(0) || user.email?.charAt(0) || '?'}
+                  </span>
+                </div>
+              )}
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium truncate">{user.name}</p>
+                <p className="text-xs text-neutral-400 truncate">{user.email}</p>
+              </div>
+            </div>
+            <button
+              onClick={() => signOut({ callbackUrl: '/login' })}
+              className="w-full mt-3 flex items-center justify-center gap-2 px-3 py-2 text-sm text-neutral-400 hover:text-white hover:bg-neutral-800 rounded-lg transition-colors"
+            >
+              <LogoutIcon />
+              Sign Out
+            </button>
+          </div>
+        )}
+      </div>
+    </>
   );
 }

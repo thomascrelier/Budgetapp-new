@@ -103,9 +103,9 @@ export default function Accounts({ onAccountCreated }) {
           <div className="animate-spin rounded-full h-12 w-12 border-4 border-text-primary border-t-transparent"></div>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {accounts.map((account) => (
-            <div key={account.id} className="bg-surface rounded-xl shadow-sm border border-border p-6 hover:shadow-md transition-shadow">
+            <div key={account.id} className="bg-surface rounded-xl shadow-sm border border-border p-4 md:p-6 hover:shadow-md transition-shadow">
               <div className="flex items-start justify-between">
                 <div>
                   <h3 className="font-semibold text-text-primary">{account.name}</h3>
@@ -146,7 +146,7 @@ export default function Accounts({ onAccountCreated }) {
       {showForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/50" onClick={() => setShowForm(false)} />
-          <div className="relative bg-surface rounded-xl shadow-xl w-full max-w-md mx-4 p-6">
+          <div className="relative bg-surface rounded-xl shadow-xl w-full max-w-md mx-4 p-4 md:p-6">
             <h2 className="text-lg font-bold text-text-primary mb-4">Add New Account</h2>
 
             <form onSubmit={handleSubmit} className="space-y-4">

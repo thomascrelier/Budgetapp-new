@@ -15,15 +15,16 @@ import {
 } from 'recharts';
 import api from '@/lib/api';
 import KpiCard from './KpiCard';
-import BudgetProgressBar from './BudgetProgressBar';
+import SpendingRiskTracker from './SpendingRiskTracker';
+import MonthDetail from './MonthDetail';
 
 export default function Dashboard({ selectedAccount }) {
   const [loading, setLoading] = useState(true);
   const [dashboard, setDashboard] = useState(null);
   const [cashFlow, setCashFlow] = useState([]);
   const [balanceHistory, setBalanceHistory] = useState([]);
-  const [budgetStatus, setBudgetStatus] = useState([]);
   const [accounts, setAccounts] = useState([]);
+  const [selectedMonth, setSelectedMonth] = useState(null);
 
   useEffect(() => {
     loadData();
@@ -34,18 +35,16 @@ export default function Dashboard({ selectedAccount }) {
     try {
       const accountIds = selectedAccount || null;
 
-      const [dashboardRes, cashFlowRes, balanceRes, budgetRes, accountsRes] = await Promise.all([
+      const [dashboardRes, cashFlowRes, balanceRes, accountsRes] = await Promise.all([
         api.getDashboard(accountIds),
         api.getCashFlow(6, accountIds),
         api.getBalanceHistory(30, selectedAccount),
-        api.getBudgetStatus(null, accountIds),
         api.getAccounts(),
       ]);
 
       setDashboard(dashboardRes);
       setCashFlow(cashFlowRes.data || []);
       setBalanceHistory(balanceRes.data || []);
-      setBudgetStatus(budgetRes.budgets || []);
       setAccounts(accountsRes.accounts || []);
     } catch (error) {
       console.error('Failed to load dashboard data:', error);
@@ -84,6 +83,23 @@ export default function Dashboard({ selectedAccount }) {
 
   const kpis = dashboard?.kpis || {};
 
+  // If a month is selected, show the drill-down view
+  if (selectedMonth) {
+    return (
+      <MonthDetail
+        month={selectedMonth}
+        selectedAccount={selectedAccount}
+        onBack={() => setSelectedMonth(null)}
+      />
+    );
+  }
+
+  const handleBarClick = (data) => {
+    if (data?.month) {
+      setSelectedMonth(data.month);
+    }
+  };
+
   return (
     <div className="space-y-8">
       {/* Page Header */}
@@ -93,8 +109,8 @@ export default function Dashboard({ selectedAccount }) {
       </div>
 
       {/* Account Balance Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {['Main Chequing', 'CIBC Rental', 'CIBC Visa'].map((accountName) => {
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        {['Main Chequing', 'CIBC Rental', 'CIBC Visa', 'Rogers Mastercard'].map((accountName) => {
           const account = accounts.find(a => a.name === accountName);
           const balance = account ? parseFloat(account.current_balance) : 0;
           const isCredit = accountName.toLowerCase().includes('credit') || accountName.toLowerCase().includes('visa');
@@ -202,36 +218,15 @@ export default function Dashboard({ selectedAccount }) {
                   }}
                 />
                 <Legend />
-                <Bar dataKey="income" name="Income" fill="#22C55E" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="expenses" name="Expenses" fill="#EF4444" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="income" name="Income" fill="#22C55E" radius={[4, 4, 0, 0]} cursor="pointer" onClick={handleBarClick} />
+                <Bar dataKey="expenses" name="Expenses" fill="#EF4444" radius={[4, 4, 0, 0]} cursor="pointer" onClick={handleBarClick} />
               </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
 
-        {/* Budget Progress */}
-        <div className="bg-surface rounded-xl shadow-sm border border-border p-6">
-          <h2 className="text-lg font-bold text-text-primary mb-4">Budget Progress</h2>
-          <div className="space-y-2 max-h-64 overflow-y-auto">
-            {budgetStatus.length > 0 ? (
-              budgetStatus.map((budget) => (
-                <BudgetProgressBar
-                  key={budget.category_name}
-                  category={budget.category_name}
-                  spent={budget.spent}
-                  limit={budget.monthly_limit}
-                  percentage={budget.percentage_used}
-                  status={budget.status}
-                />
-              ))
-            ) : (
-              <div className="text-center py-8 text-text-tertiary">
-                <p>No budgets set up yet.</p>
-                <p className="text-sm mt-1">Go to Budget Settings to create one.</p>
-              </div>
-            )}
-          </div>
-        </div>
+        {/* Spending Risk Tracker */}
+        <SpendingRiskTracker selectedAccount={selectedAccount} />
       </div>
 
       {/* Balance History */}

@@ -19,6 +19,7 @@ export default function Home() {
   const [selectedAccount, setSelectedAccount] = useState(null);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -68,6 +69,19 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-background">
+      {/* Mobile top bar */}
+      <div className="md:hidden fixed top-0 left-0 right-0 h-14 bg-text-primary text-white flex items-center px-4 z-20">
+        <button onClick={() => setSidebarOpen(true)} className="p-2 -ml-2">
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+        <span className="flex-1 text-center font-bold">Budget Tracker</span>
+        {session?.user?.image && (
+          <img src={session.user.image} alt="" className="w-8 h-8 rounded-full" />
+        )}
+      </div>
+
       <Sidebar
         currentPage={currentPage}
         onPageChange={setCurrentPage}
@@ -76,9 +90,11 @@ export default function Home() {
         onUploadClick={() => setIsUploadModalOpen(true)}
         onRefreshClick={handleRefreshData}
         user={session?.user}
+        isOpen={sidebarOpen}
+        onToggle={() => setSidebarOpen(!sidebarOpen)}
       />
 
-      <main className="ml-64 p-8">
+      <main className="ml-0 pt-16 p-4 md:ml-64 md:pt-0 md:p-8">
         {renderPage()}
       </main>
 

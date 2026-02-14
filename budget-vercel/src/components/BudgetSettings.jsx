@@ -133,7 +133,7 @@ export default function BudgetSettings({ selectedAccount }) {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {budgetStatus.map((budget) => (
-            <div key={budget.category_name} className="bg-surface rounded-xl shadow-sm border border-border p-6 hover:shadow-md transition-shadow">
+            <div key={budget.category_name} className="bg-surface rounded-xl shadow-sm border border-border p-4 md:p-6 hover:shadow-md transition-shadow">
               <div className="flex items-start justify-between">
                 <div>
                   <h3 className="font-semibold text-text-primary">{budget.category_name}</h3>
@@ -184,7 +184,7 @@ export default function BudgetSettings({ selectedAccount }) {
       {showForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/50" onClick={() => setShowForm(false)} />
-          <div className="relative bg-surface rounded-xl shadow-xl w-full max-w-md mx-4 p-6">
+          <div className="relative bg-surface rounded-xl shadow-xl w-full max-w-md mx-4 p-4 md:p-6">
             <h2 className="text-lg font-bold text-text-primary mb-4">Create Budget</h2>
 
             <form onSubmit={handleSubmit} className="space-y-4">

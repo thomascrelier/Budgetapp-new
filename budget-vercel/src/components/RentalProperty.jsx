@@ -144,7 +144,7 @@ export default function RentalProperty() {
 
       {/* Annual Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-surface rounded-xl shadow-sm border border-border p-6">
+        <div className="bg-surface rounded-xl shadow-sm border border-border p-4 md:p-6">
           <p className="text-text-tertiary text-sm">Annual Income</p>
           <p className="text-2xl font-bold text-positive mt-1">
             {formatCurrency(annual_summary.total_income || 0)}
@@ -163,7 +163,7 @@ export default function RentalProperty() {
             )}
           </p>
         </div>
-        <div className="bg-surface rounded-xl shadow-sm border border-border p-6">
+        <div className="bg-surface rounded-xl shadow-sm border border-border p-4 md:p-6">
           <p className="text-text-tertiary text-sm">Annual Expenses</p>
           <p className="text-2xl font-bold text-negative mt-1">
             {formatCurrency(annual_summary.total_expenses || 0)}
@@ -182,7 +182,7 @@ export default function RentalProperty() {
             )}
           </p>
         </div>
-        <div className="bg-surface rounded-xl shadow-sm border border-border p-6">
+        <div className="bg-surface rounded-xl shadow-sm border border-border p-4 md:p-6">
           <p className="text-text-tertiary text-sm">Net Income</p>
           <p className={`text-2xl font-bold mt-1 ${
             (annual_summary.net_income || 0) >= 0 ? 'text-positive' : 'text-negative'
@@ -370,9 +370,9 @@ export default function RentalProperty() {
       {/* Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Monthly Income vs Expenses with previous year overlay */}
-        <div className="bg-surface rounded-xl shadow-sm border border-border p-6">
+        <div className="bg-surface rounded-xl shadow-sm border border-border p-4 md:p-6">
           <h2 className="text-lg font-bold text-text-primary mb-4">Monthly Income vs Expenses</h2>
-          <div className="h-64">
+          <div className="h-48 md:h-64">
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={mergedMonthlyData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#E5E5E5" />
@@ -399,10 +399,10 @@ export default function RentalProperty() {
         </div>
 
         {/* Expense Breakdown Pie Chart (T776 groupings) */}
-        <div className="bg-surface rounded-xl shadow-sm border border-border p-6">
+        <div className="bg-surface rounded-xl shadow-sm border border-border p-4 md:p-6">
           <h2 className="text-lg font-bold text-text-primary mb-4">Expense Breakdown</h2>
           {t776_pie_data.length > 0 ? (
-            <div className="h-64">
+            <div className="h-48 md:h-64">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
@@ -427,7 +427,7 @@ export default function RentalProperty() {
               </ResponsiveContainer>
             </div>
           ) : (
-            <div className="h-64 flex items-center justify-center text-text-tertiary">
+            <div className="h-48 md:h-64 flex items-center justify-center text-text-tertiary">
               No expense data for this year
             </div>
           )}
@@ -436,7 +436,7 @@ export default function RentalProperty() {
 
       {/* Year-over-Year Category Comparison */}
       {yoyCategoryData.length > 0 && (
-        <div className="bg-surface rounded-xl shadow-sm border border-border p-6">
+        <div className="bg-surface rounded-xl shadow-sm border border-border p-4 md:p-6">
           <h2 className="text-lg font-bold text-text-primary mb-4">Year-over-Year Category Comparison</h2>
           <div style={{ height: Math.max(300, yoyCategoryData.length * 50) }}>
             <ResponsiveContainer width="100%" height="100%">

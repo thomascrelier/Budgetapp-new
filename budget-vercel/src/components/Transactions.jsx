@@ -189,7 +189,7 @@ export default function Transactions({ selectedAccount }) {
 
       {/* Filter Bar */}
       <div className="bg-surface rounded-xl shadow-sm border border-border p-4">
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
           {/* Search */}
           <div>
             <label className="block text-xs font-medium text-text-tertiary mb-1">Search</label>
@@ -281,19 +281,19 @@ export default function Transactions({ selectedAccount }) {
             <table className="w-full">
               <thead className="bg-background border-b border-border">
                 <tr>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-text-secondary uppercase tracking-wider">
+                  <th className="px-3 py-2 md:px-6 md:py-3 text-left text-xs font-semibold text-text-secondary uppercase tracking-wider">
                     Date
                   </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-text-secondary uppercase tracking-wider">
+                  <th className="px-3 py-2 md:px-6 md:py-3 text-left text-xs font-semibold text-text-secondary uppercase tracking-wider">
                     Account
                   </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-text-secondary uppercase tracking-wider">
+                  <th className="px-3 py-2 md:px-6 md:py-3 text-left text-xs font-semibold text-text-secondary uppercase tracking-wider">
                     Description
                   </th>
-                  <th className="px-6 py-4 text-right text-xs font-semibold text-text-secondary uppercase tracking-wider">
+                  <th className="px-3 py-2 md:px-6 md:py-3 text-right text-xs font-semibold text-text-secondary uppercase tracking-wider">
                     Amount
                   </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-text-secondary uppercase tracking-wider">
+                  <th className="px-3 py-2 md:px-6 md:py-3 text-left text-xs font-semibold text-text-secondary uppercase tracking-wider">
                     Category
                   </th>
                 </tr>
@@ -301,28 +301,28 @@ export default function Transactions({ selectedAccount }) {
               <tbody className="divide-y divide-border">
                 {transactions.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="px-6 py-12 text-center text-text-tertiary">
+                    <td colSpan={5} className="px-3 py-12 md:px-6 text-center text-text-tertiary">
                       No transactions found
                     </td>
                   </tr>
                 ) : (
                   transactions.map((transaction) => (
                     <tr key={transaction.id} className="hover:bg-surface-hover transition-colors">
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-text-primary">
+                      <td className="px-3 py-2 md:px-6 md:py-4 whitespace-nowrap text-sm text-text-primary">
                         {transaction.date}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-text-secondary">
+                      <td className="px-3 py-2 md:px-6 md:py-4 whitespace-nowrap text-sm text-text-secondary">
                         {transaction.account_name}
                       </td>
-                      <td className="px-6 py-4 text-sm text-text-primary max-w-md truncate">
+                      <td className="px-3 py-2 md:px-6 md:py-4 text-sm text-text-primary max-w-md truncate">
                         {transaction.description}
                       </td>
-                      <td className={`px-6 py-4 whitespace-nowrap text-sm font-medium text-right ${
+                      <td className={`px-3 py-2 md:px-6 md:py-4 whitespace-nowrap text-sm font-medium text-right ${
                         transaction.amount >= 0 ? 'text-positive' : 'text-negative'
                       }`}>
                         {formatCurrency(transaction.amount)}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm">
+                      <td className="px-3 py-2 md:px-6 md:py-4 whitespace-nowrap text-sm">
                         {editingId === transaction.id ? (
                           <div className="flex items-center gap-2">
                             <input
