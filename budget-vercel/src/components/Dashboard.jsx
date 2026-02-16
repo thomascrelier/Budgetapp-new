@@ -99,7 +99,7 @@ export default function Dashboard() {
     return (
       <MonthDetail
         month={selectedMonth}
-        selectedAccount={personalAccountIds}
+        selectedAccount={null}
         onBack={() => setSelectedMonth(null)}
       />
     );
@@ -233,7 +233,7 @@ export default function Dashboard() {
         </div>
 
         {/* Spending Risk Tracker */}
-        <SpendingRiskTracker selectedAccount={personalAccountIds} />
+        <SpendingRiskTracker />
       </div>
 
       {/* Balance History */}
