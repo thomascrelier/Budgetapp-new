@@ -8,7 +8,6 @@ import UploadModal from '@/components/UploadModal';
 import api from '@/lib/api';
 import Dashboard from '@/components/Dashboard';
 import Transactions from '@/components/Transactions';
-import Accounts from '@/components/Accounts';
 import BudgetSettings from '@/components/BudgetSettings';
 import RentalProperty from '@/components/RentalProperty';
 
@@ -16,7 +15,6 @@ export default function Home() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const [currentPage, setCurrentPage] = useState('dashboard');
-  const [selectedAccount, setSelectedAccount] = useState(null);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -53,17 +51,15 @@ export default function Home() {
   const renderPage = () => {
     switch (currentPage) {
       case 'dashboard':
-        return <Dashboard key={refreshKey} selectedAccount={selectedAccount} />;
+        return <Dashboard key={refreshKey} />;
       case 'rental-property':
         return <RentalProperty key={refreshKey} />;
       case 'transactions':
-        return <Transactions key={refreshKey} selectedAccount={selectedAccount} />;
-      case 'accounts':
-        return <Accounts key={refreshKey} onAccountCreated={() => setRefreshKey((prev) => prev + 1)} />;
+        return <Transactions key={refreshKey} />;
       case 'budgets':
-        return <BudgetSettings key={refreshKey} selectedAccount={selectedAccount} />;
+        return <BudgetSettings key={refreshKey} />;
       default:
-        return <Dashboard key={refreshKey} selectedAccount={selectedAccount} />;
+        return <Dashboard key={refreshKey} />;
     }
   };
 
@@ -85,8 +81,6 @@ export default function Home() {
       <Sidebar
         currentPage={currentPage}
         onPageChange={setCurrentPage}
-        selectedAccount={selectedAccount}
-        onAccountChange={setSelectedAccount}
         onUploadClick={() => setIsUploadModalOpen(true)}
         onRefreshClick={handleRefreshData}
         user={session?.user}

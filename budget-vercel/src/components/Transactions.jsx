@@ -3,34 +3,9 @@
 import { useState, useEffect, useRef } from 'react';
 import api from '@/lib/api';
 
-const CATEGORIES = [
-  'Uncategorized',
-  'Groceries',
-  'Dining',
-  'Transportation',
-  'Utilities',
-  'Entertainment',
-  'Shopping',
-  'Pharmacy',
-  'Medical',
-  'Therapy',
-  'Veterinary',
-  'Income',
-  'Rental Income',
-  'Rent',
-  'Electricity',
-  'Gas',
-  'Water',
-  'Internet',
-  'Insurance',
-  'Property Tax',
-  'Maintenance',
-  'HOA',
-  'Transfer',
-  'Other',
-];
+// Categories are loaded dynamically from the API via availableCategories state
 
-export default function Transactions({ selectedAccount }) {
+export default function Transactions() {
   const [loading, setLoading] = useState(true);
   const [transactions, setTransactions] = useState([]);
   const [total, setTotal] = useState(0);
@@ -56,11 +31,6 @@ export default function Transactions({ selectedAccount }) {
       setAccounts((data.accounts || []).sort((a, b) => a.name.localeCompare(b.name)));
     });
   }, []);
-
-  // Sync parent selectedAccount into filter
-  useEffect(() => {
-    setFilterAccount(selectedAccount ? String(selectedAccount) : '');
-  }, [selectedAccount]);
 
   // Reset page when filters change
   useEffect(() => {
@@ -352,14 +322,14 @@ export default function Transactions({ selectedAccount }) {
                           </div>
                         ) : (
                           <select
-                            value={CATEGORIES.includes(transaction.category) ? transaction.category : 'custom'}
+                            value={availableCategories.includes(transaction.category) ? transaction.category : 'custom'}
                             onChange={(e) => handleCategoryChange(transaction.id, e.target.value)}
                             className="px-2 py-1 border border-border rounded bg-surface focus:outline-none focus:ring-2 focus:ring-text-primary text-sm"
                           >
-                            {!CATEGORIES.includes(transaction.category) && (
+                            {!availableCategories.includes(transaction.category) && (
                               <option value="custom">{transaction.category}</option>
                             )}
-                            {CATEGORIES.map((cat) => (
+                            {availableCategories.map((cat) => (
                               <option key={cat} value={cat}>
                                 {cat}
                               </option>

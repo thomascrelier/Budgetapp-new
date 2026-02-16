@@ -18,7 +18,7 @@ import KpiCard from './KpiCard';
 import SpendingRiskTracker from './SpendingRiskTracker';
 import MonthDetail from './MonthDetail';
 
-export default function Dashboard({ selectedAccount }) {
+export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [dashboard, setDashboard] = useState(null);
   const [cashFlow, setCashFlow] = useState([]);
@@ -29,7 +29,7 @@ export default function Dashboard({ selectedAccount }) {
 
   useEffect(() => {
     loadData();
-  }, [selectedAccount]);
+  }, []);
 
   const loadData = async () => {
     setLoading(true);
@@ -46,7 +46,7 @@ export default function Dashboard({ selectedAccount }) {
         .join(',');
       setPersonalAccountIds(personalIds || null);
 
-      let accountIds = selectedAccount || personalIds || null;
+      let accountIds = personalIds || null;
 
       const [dashboardRes, cashFlowRes, balanceRes] = await Promise.all([
         api.getDashboard(accountIds),
@@ -99,7 +99,7 @@ export default function Dashboard({ selectedAccount }) {
     return (
       <MonthDetail
         month={selectedMonth}
-        selectedAccount={selectedAccount || personalAccountIds}
+        selectedAccount={personalAccountIds}
         onBack={() => setSelectedMonth(null)}
       />
     );
@@ -233,7 +233,7 @@ export default function Dashboard({ selectedAccount }) {
         </div>
 
         {/* Spending Risk Tracker */}
-        <SpendingRiskTracker selectedAccount={selectedAccount || personalAccountIds} />
+        <SpendingRiskTracker selectedAccount={personalAccountIds} />
       </div>
 
       {/* Balance History */}

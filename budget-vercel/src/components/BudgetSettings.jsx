@@ -3,23 +3,11 @@
 import { useState, useEffect } from 'react';
 import api from '@/lib/api';
 
-const DEFAULT_CATEGORIES = [
-  'Groceries',
-  'Dining',
-  'Transportation',
-  'Utilities',
-  'Entertainment',
-  'Shopping',
-  'Healthcare',
-  'Rent',
-  'Insurance',
-  'Other',
-];
-
-export default function BudgetSettings({ selectedAccount }) {
+export default function BudgetSettings() {
   const [loading, setLoading] = useState(true);
   const [budgets, setBudgets] = useState([]);
   const [budgetStatus, setBudgetStatus] = useState([]);
+  const [allCategories, setAllCategories] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({
     category_name: '',
@@ -31,17 +19,21 @@ export default function BudgetSettings({ selectedAccount }) {
 
   useEffect(() => {
     loadData();
-  }, [selectedAccount]);
+  }, []);
 
   const loadData = async () => {
     setLoading(true);
     try {
-      const [budgetsRes, statusRes] = await Promise.all([
+      const [budgetsRes, statusRes, txnRes] = await Promise.all([
         api.getBudgets(),
-        api.getBudgetStatus(null, selectedAccount),
+        api.getBudgetStatus(),
+        api.getTransactions({ limit: 1 }),
       ]);
       setBudgets(budgetsRes.budgets || []);
       setBudgetStatus(statusRes.budgets || []);
+      if (txnRes.categories) {
+        setAllCategories(txnRes.categories);
+      }
     } catch (err) {
       console.error('Failed to load budgets:', err);
     } finally {
@@ -93,7 +85,7 @@ export default function BudgetSettings({ selectedAccount }) {
 
   // Get unused categories
   const usedCategories = budgets.map(b => b.category_name);
-  const availableCategories = DEFAULT_CATEGORIES.filter(c => !usedCategories.includes(c));
+  const availableCategories = allCategories.filter(c => !usedCategories.includes(c));
 
   return (
     <div className="space-y-6">
