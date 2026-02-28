@@ -28,13 +28,13 @@ CATEGORY_RULES = [
     ("PREAUTHORIZED DEBIT CIBC-DISATF", "Fees & Charges"),
 
     # Main Chequing — E-transfers & banking (specific recipients first)
-    ("dinara", "Housing"),
-    ("Raman Dhugga", "Housing"),
+    ("dinara", "Rent"),
+    ("Raman Dhugga", "Rent"),
     ("mike construction", "Renovations"),
     ("Bobby HVAC", "Renovations"),
     ("MARIUSZ OWCZARZ", "Renovations"),
     ("Adam Energy Audit", "Renovations"),
-    ("Adam Law parking", "Other"),
+    ("Adam Law parking", "Transportation"),
     ("Ramona Therapist", "Therapy"),
     ("joan physio", "Therapy"),
     ("Ryan Bolton soccer", "Entertainment"),
@@ -456,7 +456,7 @@ CATEGORY_RULES = [
 
     # ===== OTHER =====
     ("CALEDON BUILDING", "Other"),
-    ("CALEDON- CCRW", "Other"),
+    ("CALEDON- CCRW", "Gym Membership"),
     ("MECP-ONTPARK", "Other"),
     ("MECP-SIBBALD", "Other"),
 

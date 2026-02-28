@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getAllTransactions } from '@/lib/sheets';
 
-const TRACKED_CATEGORIES = ['Coffee Shops', 'Gas', 'Groceries', 'Dining'];
+const TRACKED_CATEGORIES = ['Coffee Shops', 'Car Fuel', 'Groceries', 'Dining'];
 
 function getMonthStr(year, month) {
   return `${year}-${String(month).padStart(2, '0')}`;
