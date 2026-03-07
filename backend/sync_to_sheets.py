@@ -15,8 +15,8 @@ import gspread
 from google.oauth2.service_account import Credentials
 
 # Config
-DB_PATH = "/Users/thomas.crelier/Desktop/Claude/Budget/backend/budgetcsv.db"
-ENV_PATH = "/Users/thomas.crelier/Desktop/Claude/Budget/budget-vercel/.env.local"
+DB_PATH = "/Users/thomas.crelier/Desktop/Claude/Budgetapp-new/backend/budgetcsv.db"
+ENV_PATH = "/Users/thomas.crelier/Desktop/Claude/Budgetapp-new/budget-vercel/.env.local"
 SPREADSHEET_ID = "1R6WeQexEfvg5THbjfHRpXIXv5V1jdyAUp2pdIAPX5Xo"
 BATCH_SIZE = 2000  # rows per API call (Sheets allows up to ~50k cells per request)
 
