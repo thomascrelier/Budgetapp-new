@@ -13,13 +13,13 @@ export default function BudgetProgressBar({ category, spent, limit, percentage, 
   const getStatusColor = () => {
     if (status === 'exceeded' || percentage >= 100) return 'bg-negative';
     if (status === 'warning' || percentage >= 75) return 'bg-warning';
-    return 'bg-text-primary';
+    return 'bg-accent';
   };
 
   const getStatusBgColor = () => {
-    if (status === 'exceeded' || percentage >= 100) return 'bg-red-100';
-    if (status === 'warning' || percentage >= 75) return 'bg-amber-100';
-    return 'bg-neutral-100';
+    if (status === 'exceeded' || percentage >= 100) return 'bg-negative/10';
+    if (status === 'warning' || percentage >= 75) return 'bg-warning/10';
+    return 'bg-surface-hover';
   };
 
   return (

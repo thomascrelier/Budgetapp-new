@@ -25,11 +25,11 @@ export default function KpiCard({ title, value, type = 'default', subtitle, icon
   };
 
   return (
-    <div className="bg-surface rounded-xl shadow-sm border border-border p-6 hover:shadow-md transition-shadow">
+    <div className="glass-card rounded-xl p-6 hover:shadow-lg hover:shadow-black/20 transition-all duration-300">
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-text-tertiary text-sm font-medium">{title}</p>
-          <p className={`text-2xl font-bold mt-1 ${getValueColor()}`}>
+          <p className="text-text-tertiary text-sm font-medium tracking-wide">{title}</p>
+          <p className={`text-2xl font-display mt-1 ${getValueColor()}`}>
             {formatCurrency(value)}
           </p>
           {subtitle && (
@@ -37,7 +37,7 @@ export default function KpiCard({ title, value, type = 'default', subtitle, icon
           )}
         </div>
         {icon && (
-          <div className="p-3 bg-background rounded-full">
+          <div className="p-3 bg-surface-hover/50 rounded-full">
             {icon}
           </div>
         )}

@@ -13,8 +13,8 @@ export const viewport = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en">
-      <body className="antialiased">
+    <html lang="en" className="dark">
+      <body className="antialiased font-sans grain">
         <AuthProvider>{children}</AuthProvider>
       </body>
     </html>

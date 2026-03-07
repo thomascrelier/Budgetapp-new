@@ -3,8 +3,6 @@
 import { useState, useEffect, useRef } from 'react';
 import api from '@/lib/api';
 
-// Categories are loaded dynamically from the API via availableCategories state
-
 export default function Transactions() {
   const [loading, setLoading] = useState(true);
   const [transactions, setTransactions] = useState([]);
@@ -14,7 +12,6 @@ export default function Transactions() {
   const [editingId, setEditingId] = useState(null);
   const limit = 50;
 
-  // Filter state
   const [accounts, setAccounts] = useState([]);
   const [availableCategories, setAvailableCategories] = useState([]);
   const [filterAccount, setFilterAccount] = useState('');
@@ -22,17 +19,15 @@ export default function Transactions() {
   const [filterSearch, setFilterSearch] = useState('');
   const [filterStartDate, setFilterStartDate] = useState('');
   const [filterEndDate, setFilterEndDate] = useState('');
-  const [filterAmountType, setFilterAmountType] = useState(''); // '', 'income', 'expense'
+  const [filterAmountType, setFilterAmountType] = useState('');
   const searchTimeout = useRef(null);
 
-  // Load accounts list on mount
   useEffect(() => {
     api.getAccounts().then(data => {
       setAccounts((data.accounts || []).sort((a, b) => a.name.localeCompare(b.name)));
     });
   }, []);
 
-  // Reset page when filters change
   useEffect(() => {
     setPage(0);
   }, [filterAccount, filterCategory, filterSearch, filterStartDate, filterEndDate, filterAmountType]);
@@ -44,10 +39,7 @@ export default function Transactions() {
   const loadTransactions = async () => {
     setLoading(true);
     try {
-      const params = {
-        skip: page * limit,
-        limit,
-      };
+      const params = { skip: page * limit, limit };
       if (filterAccount) params.account_id = filterAccount;
       if (filterCategory) params.category = filterCategory;
       if (filterSearch) params.search = filterSearch;
@@ -57,7 +49,6 @@ export default function Transactions() {
       const data = await api.getTransactions(params);
       let txns = data.transactions || [];
 
-      // Client-side amount type filter
       if (filterAmountType === 'income') {
         txns = txns.filter(t => t.amount > 0);
       } else if (filterAmountType === 'expense') {
@@ -77,7 +68,6 @@ export default function Transactions() {
   };
 
   const handleSearchInput = (value) => {
-    // Debounce search input
     if (searchTimeout.current) clearTimeout(searchTimeout.current);
     searchTimeout.current = setTimeout(() => {
       setFilterSearch(value);
@@ -90,12 +80,9 @@ export default function Transactions() {
       setCustomCategory('');
       return;
     }
-
     try {
       await api.updateCategory(id, category);
-      setTransactions(transactions.map(t =>
-        t.id === id ? { ...t, category } : t
-      ));
+      setTransactions(transactions.map(t => t.id === id ? { ...t, category } : t));
     } catch (error) {
       console.error('Failed to update category:', error);
     }
@@ -103,12 +90,9 @@ export default function Transactions() {
 
   const handleCustomCategorySubmit = async (id) => {
     if (!customCategory.trim()) return;
-
     try {
       await api.updateCategory(id, customCategory.trim());
-      setTransactions(transactions.map(t =>
-        t.id === id ? { ...t, category: customCategory.trim() } : t
-      ));
+      setTransactions(transactions.map(t => t.id === id ? { ...t, category: customCategory.trim() } : t));
       setEditingId(null);
       setCustomCategory('');
     } catch (error) {
@@ -137,101 +121,57 @@ export default function Transactions() {
 
   const totalPages = Math.ceil(total / limit);
 
+  const inputClasses = 'w-full px-3 py-1.5 border border-border rounded-lg bg-surface text-text-primary text-sm focus:outline-none focus:ring-1 focus:ring-accent/50 focus:border-accent/50';
+
   return (
     <div className="space-y-6">
       {/* Page Header */}
-      <div className="flex justify-between items-center">
+      <div className="flex justify-between items-center animate-fade-in">
         <div>
-          <h1 className="text-3xl font-bold text-text-primary">Transactions</h1>
+          <h1 className="text-3xl font-semibold text-text-primary">Transactions</h1>
           <p className="text-text-tertiary mt-1">
             {total} transactions{hasActiveFilters ? ' (filtered)' : ''}
           </p>
         </div>
         {hasActiveFilters && (
-          <button
-            onClick={clearFilters}
-            className="px-3 py-1.5 text-sm border border-border rounded-lg hover:bg-surface-hover transition-colors text-text-secondary"
-          >
+          <button onClick={clearFilters} className="px-3 py-1.5 text-sm border border-border rounded-lg hover:bg-surface-hover transition-colors text-text-secondary">
             Clear filters
           </button>
         )}
       </div>
 
       {/* Filter Bar */}
-      <div className="bg-surface rounded-xl shadow-sm border border-border p-4">
+      <div className="glass-card rounded-xl p-4">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
-          {/* Search */}
           <div>
-            <label className="block text-xs font-medium text-text-tertiary mb-1">Search</label>
-            <input
-              type="text"
-              placeholder="Description..."
-              defaultValue={filterSearch}
-              onChange={(e) => handleSearchInput(e.target.value)}
-              className="w-full px-3 py-1.5 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-text-primary"
-            />
+            <label className="block text-xs font-medium text-text-muted mb-1">Search</label>
+            <input type="text" placeholder="Description..." defaultValue={filterSearch} onChange={(e) => handleSearchInput(e.target.value)} className={inputClasses} />
           </div>
-
-          {/* Account */}
           <div>
-            <label className="block text-xs font-medium text-text-tertiary mb-1">Account</label>
-            <select
-              value={filterAccount}
-              onChange={(e) => setFilterAccount(e.target.value)}
-              className="w-full px-3 py-1.5 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-text-primary"
-            >
+            <label className="block text-xs font-medium text-text-muted mb-1">Account</label>
+            <select value={filterAccount} onChange={(e) => setFilterAccount(e.target.value)} className={inputClasses}>
               <option value="">All accounts</option>
-              {accounts.map(a => (
-                <option key={a.id} value={a.id}>{a.name}</option>
-              ))}
+              {accounts.map(a => (<option key={a.id} value={a.id}>{a.name}</option>))}
             </select>
           </div>
-
-          {/* Category */}
           <div>
-            <label className="block text-xs font-medium text-text-tertiary mb-1">Category</label>
-            <select
-              value={filterCategory}
-              onChange={(e) => setFilterCategory(e.target.value)}
-              className="w-full px-3 py-1.5 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-text-primary"
-            >
+            <label className="block text-xs font-medium text-text-muted mb-1">Category</label>
+            <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)} className={inputClasses}>
               <option value="">All categories</option>
-              {availableCategories.map(cat => (
-                <option key={cat} value={cat}>{cat}</option>
-              ))}
+              {availableCategories.map(cat => (<option key={cat} value={cat}>{cat}</option>))}
             </select>
           </div>
-
-          {/* Start Date */}
           <div>
-            <label className="block text-xs font-medium text-text-tertiary mb-1">From</label>
-            <input
-              type="date"
-              value={filterStartDate}
-              onChange={(e) => setFilterStartDate(e.target.value)}
-              className="w-full px-3 py-1.5 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-text-primary"
-            />
+            <label className="block text-xs font-medium text-text-muted mb-1">From</label>
+            <input type="date" value={filterStartDate} onChange={(e) => setFilterStartDate(e.target.value)} className={inputClasses} />
           </div>
-
-          {/* End Date */}
           <div>
-            <label className="block text-xs font-medium text-text-tertiary mb-1">To</label>
-            <input
-              type="date"
-              value={filterEndDate}
-              onChange={(e) => setFilterEndDate(e.target.value)}
-              className="w-full px-3 py-1.5 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-text-primary"
-            />
+            <label className="block text-xs font-medium text-text-muted mb-1">To</label>
+            <input type="date" value={filterEndDate} onChange={(e) => setFilterEndDate(e.target.value)} className={inputClasses} />
           </div>
-
-          {/* Amount Type */}
           <div>
-            <label className="block text-xs font-medium text-text-tertiary mb-1">Amount</label>
-            <select
-              value={filterAmountType}
-              onChange={(e) => setFilterAmountType(e.target.value)}
-              className="w-full px-3 py-1.5 border border-border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-text-primary"
-            >
+            <label className="block text-xs font-medium text-text-muted mb-1">Amount</label>
+            <select value={filterAmountType} onChange={(e) => setFilterAmountType(e.target.value)} className={inputClasses}>
               <option value="">All</option>
               <option value="income">Income only</option>
               <option value="expense">Expenses only</option>
@@ -241,53 +181,35 @@ export default function Transactions() {
       </div>
 
       {/* Transactions Table */}
-      <div className="bg-surface rounded-xl shadow-sm border border-border overflow-hidden">
+      <div className="glass-card rounded-xl overflow-hidden">
         {loading ? (
           <div className="flex items-center justify-center h-64">
-            <div className="animate-spin rounded-full h-12 w-12 border-4 border-text-primary border-t-transparent"></div>
+            <div className="animate-spin rounded-full h-12 w-12 border-2 border-accent border-t-transparent"></div>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-background border-b border-border">
+              <thead className="bg-surface border-b border-border">
                 <tr>
-                  <th className="px-3 py-2 md:px-6 md:py-3 text-left text-xs font-semibold text-text-secondary uppercase tracking-wider">
-                    Date
-                  </th>
-                  <th className="px-3 py-2 md:px-6 md:py-3 text-left text-xs font-semibold text-text-secondary uppercase tracking-wider">
-                    Account
-                  </th>
-                  <th className="px-3 py-2 md:px-6 md:py-3 text-left text-xs font-semibold text-text-secondary uppercase tracking-wider">
-                    Description
-                  </th>
-                  <th className="px-3 py-2 md:px-6 md:py-3 text-right text-xs font-semibold text-text-secondary uppercase tracking-wider">
-                    Amount
-                  </th>
-                  <th className="px-3 py-2 md:px-6 md:py-3 text-left text-xs font-semibold text-text-secondary uppercase tracking-wider">
-                    Category
-                  </th>
+                  <th className="px-3 py-2 md:px-6 md:py-3 text-left text-xs font-semibold text-text-muted uppercase tracking-wider">Date</th>
+                  <th className="px-3 py-2 md:px-6 md:py-3 text-left text-xs font-semibold text-text-muted uppercase tracking-wider">Account</th>
+                  <th className="px-3 py-2 md:px-6 md:py-3 text-left text-xs font-semibold text-text-muted uppercase tracking-wider">Description</th>
+                  <th className="px-3 py-2 md:px-6 md:py-3 text-right text-xs font-semibold text-text-muted uppercase tracking-wider">Amount</th>
+                  <th className="px-3 py-2 md:px-6 md:py-3 text-left text-xs font-semibold text-text-muted uppercase tracking-wider">Category</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-border">
+              <tbody className="divide-y divide-border/50">
                 {transactions.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="px-3 py-12 md:px-6 text-center text-text-tertiary">
-                      No transactions found
-                    </td>
+                    <td colSpan={5} className="px-3 py-12 md:px-6 text-center text-text-tertiary">No transactions found</td>
                   </tr>
                 ) : (
                   transactions.map((transaction) => (
-                    <tr key={transaction.id} className="hover:bg-surface-hover transition-colors">
-                      <td className="px-3 py-2 md:px-6 md:py-4 whitespace-nowrap text-sm text-text-primary">
-                        {transaction.date}
-                      </td>
-                      <td className="px-3 py-2 md:px-6 md:py-4 whitespace-nowrap text-sm text-text-secondary">
-                        {transaction.account_name}
-                      </td>
-                      <td className="px-3 py-2 md:px-6 md:py-4 text-sm text-text-primary max-w-md truncate">
-                        {transaction.description}
-                      </td>
-                      <td className={`px-3 py-2 md:px-6 md:py-4 whitespace-nowrap text-sm font-medium text-right ${
+                    <tr key={transaction.id} className="hover:bg-surface-hover/50 transition-colors">
+                      <td className="px-3 py-2 md:px-6 md:py-4 whitespace-nowrap text-sm text-text-secondary">{transaction.date}</td>
+                      <td className="px-3 py-2 md:px-6 md:py-4 whitespace-nowrap text-sm text-text-tertiary">{transaction.account_name}</td>
+                      <td className="px-3 py-2 md:px-6 md:py-4 text-sm text-text-primary max-w-md truncate">{transaction.description}</td>
+                      <td className={`px-3 py-2 md:px-6 md:py-4 whitespace-nowrap text-sm font-display text-right ${
                         transaction.amount >= 0 ? 'text-positive' : 'text-negative'
                       }`}>
                         {formatCurrency(transaction.amount)}
@@ -295,45 +217,20 @@ export default function Transactions() {
                       <td className="px-3 py-2 md:px-6 md:py-4 whitespace-nowrap text-sm">
                         {editingId === transaction.id ? (
                           <div className="flex items-center gap-2">
-                            <input
-                              type="text"
-                              value={customCategory}
-                              onChange={(e) => setCustomCategory(e.target.value)}
-                              placeholder="Enter category"
-                              className="px-2 py-1 border border-border rounded text-sm focus:outline-none focus:ring-2 focus:ring-text-primary"
-                              autoFocus
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') handleCustomCategorySubmit(transaction.id);
-                                if (e.key === 'Escape') setEditingId(null);
-                              }}
-                            />
-                            <button
-                              onClick={() => handleCustomCategorySubmit(transaction.id)}
-                              className="px-2 py-1 bg-text-primary text-white rounded text-xs hover:bg-neutral-800"
-                            >
-                              Save
-                            </button>
-                            <button
-                              onClick={() => setEditingId(null)}
-                              className="px-2 py-1 text-text-tertiary hover:text-text-primary text-xs"
-                            >
-                              Cancel
-                            </button>
+                            <input type="text" value={customCategory} onChange={(e) => setCustomCategory(e.target.value)} placeholder="Enter category" className="px-2 py-1 border border-border rounded bg-surface text-text-primary text-sm focus:outline-none focus:ring-1 focus:ring-accent/50" autoFocus onKeyDown={(e) => { if (e.key === 'Enter') handleCustomCategorySubmit(transaction.id); if (e.key === 'Escape') setEditingId(null); }} />
+                            <button onClick={() => handleCustomCategorySubmit(transaction.id)} className="px-2 py-1 bg-accent text-background rounded text-xs font-semibold hover:bg-accent-hover">Save</button>
+                            <button onClick={() => setEditingId(null)} className="px-2 py-1 text-text-tertiary hover:text-text-primary text-xs">Cancel</button>
                           </div>
                         ) : (
                           <select
                             value={availableCategories.includes(transaction.category) ? transaction.category : 'custom'}
                             onChange={(e) => handleCategoryChange(transaction.id, e.target.value)}
-                            className="px-2 py-1 border border-border rounded bg-surface focus:outline-none focus:ring-2 focus:ring-text-primary text-sm"
+                            className="px-2 py-1 border border-border rounded bg-surface text-text-secondary focus:outline-none focus:ring-1 focus:ring-accent/50 text-sm"
                           >
                             {!availableCategories.includes(transaction.category) && (
                               <option value="custom">{transaction.category}</option>
                             )}
-                            {availableCategories.map((cat) => (
-                              <option key={cat} value={cat}>
-                                {cat}
-                              </option>
-                            ))}
+                            {availableCategories.map((cat) => (<option key={cat} value={cat}>{cat}</option>))}
                             <option value="custom">+ Custom...</option>
                           </select>
                         )}
@@ -346,27 +243,14 @@ export default function Transactions() {
           </div>
         )}
 
-        {/* Pagination */}
         {totalPages > 1 && (
           <div className="px-6 py-4 border-t border-border flex items-center justify-between">
             <p className="text-sm text-text-tertiary">
               Showing {page * limit + 1} to {Math.min((page + 1) * limit, total)} of {total}
             </p>
             <div className="flex gap-2">
-              <button
-                onClick={() => setPage(Math.max(0, page - 1))}
-                disabled={page === 0}
-                className="px-3 py-1 border border-border rounded text-sm hover:bg-surface-hover disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Previous
-              </button>
-              <button
-                onClick={() => setPage(Math.min(totalPages - 1, page + 1))}
-                disabled={page >= totalPages - 1}
-                className="px-3 py-1 border border-border rounded text-sm hover:bg-surface-hover disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Next
-              </button>
+              <button onClick={() => setPage(Math.max(0, page - 1))} disabled={page === 0} className="px-3 py-1 border border-border rounded text-sm text-text-secondary hover:bg-surface-hover disabled:opacity-30 disabled:cursor-not-allowed transition-colors">Previous</button>
+              <button onClick={() => setPage(Math.min(totalPages - 1, page + 1))} disabled={page >= totalPages - 1} className="px-3 py-1 border border-border rounded text-sm text-text-secondary hover:bg-surface-hover disabled:opacity-30 disabled:cursor-not-allowed transition-colors">Next</button>
             </div>
           </div>
         )}

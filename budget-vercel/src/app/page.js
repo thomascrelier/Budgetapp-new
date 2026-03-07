@@ -34,16 +34,14 @@ export default function Home() {
     setRefreshKey((prev) => prev + 1);
   };
 
-  // Show loading while checking auth
   if (status === 'loading') {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-4 border-text-primary border-t-transparent"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-2 border-accent border-t-transparent"></div>
       </div>
     );
   }
 
-  // Don't render if not authenticated
   if (!session) {
     return null;
   }
@@ -66,15 +64,15 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-background">
       {/* Mobile top bar */}
-      <div className="md:hidden fixed top-0 left-0 right-0 h-14 bg-text-primary text-white flex items-center px-4 z-20">
-        <button onClick={() => setSidebarOpen(true)} className="p-2 -ml-2">
+      <div className="md:hidden fixed top-0 left-0 right-0 h-14 bg-surface border-b border-border flex items-center px-4 z-20">
+        <button onClick={() => setSidebarOpen(true)} className="p-2 -ml-2 text-text-secondary">
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 6h16M4 12h16M4 18h16" />
           </svg>
         </button>
-        <span className="flex-1 text-center font-bold">Budget Tracker</span>
+        <span className="flex-1 text-center font-semibold text-text-primary">Budget Tracker</span>
         {session?.user?.image && (
-          <img src={session.user.image} alt="" className="w-8 h-8 rounded-full" />
+          <img src={session.user.image} alt="" className="w-8 h-8 rounded-full ring-2 ring-border" />
         )}
       </div>
 

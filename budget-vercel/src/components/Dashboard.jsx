@@ -18,6 +18,15 @@ import KpiCard from './KpiCard';
 import SpendingRiskTracker from './SpendingRiskTracker';
 import MonthDetail from './MonthDetail';
 
+const GRID_COLOR = '#2A2A3C';
+const TICK_COLOR = '#6E6E85';
+const TOOLTIP_STYLE = {
+  backgroundColor: '#161622',
+  border: '1px solid #2A2A3C',
+  borderRadius: '8px',
+  boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+};
+
 export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [dashboard, setDashboard] = useState(null);
@@ -34,12 +43,10 @@ export default function Dashboard() {
   const loadData = async () => {
     setLoading(true);
     try {
-      // Fetch accounts first to determine personal (non-rental) account IDs
       const accountsRes = await api.getAccounts();
       const allAccounts = accountsRes.accounts || [];
       setAccounts(allAccounts);
 
-      // Exclude CIBC Rental from dashboard data
       const personalIds = allAccounts
         .filter(a => a.name !== 'CIBC Rental')
         .map(a => a.id)
@@ -87,14 +94,13 @@ export default function Dashboard() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-4 border-text-primary border-t-transparent"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-2 border-accent border-t-transparent"></div>
       </div>
     );
   }
 
   const kpis = dashboard?.kpis || {};
 
-  // If a month is selected, show the drill-down view
   if (selectedMonth) {
     return (
       <MonthDetail
@@ -114,43 +120,40 @@ export default function Dashboard() {
   return (
     <div className="space-y-8">
       {/* Page Header */}
-      <div>
-        <h1 className="text-3xl font-bold text-text-primary">Dashboard</h1>
+      <div className="animate-fade-in">
+        <h1 className="text-3xl font-semibold text-text-primary">Dashboard</h1>
         <p className="text-text-tertiary mt-1">Overview of your financial health</p>
       </div>
 
       {/* Account Balance Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 opacity-0 animate-fade-in-up stagger-1">
         {['Main Chequing', 'CIBC Visa', 'Rogers Mastercard'].map((accountName) => {
           const account = accounts.find(a => a.name === accountName);
           const balance = account ? parseFloat(account.current_balance) : 0;
           const isCredit = ['visa', 'credit', 'mastercard'].some(k => accountName.toLowerCase().includes(k));
 
           return (
-            <div
-              key={accountName}
-              className="bg-surface rounded-xl shadow-sm border border-border p-6 hover:shadow-md transition-shadow"
-            >
+            <div key={accountName} className="glass-card rounded-xl p-5 hover:shadow-lg hover:shadow-black/20 transition-all duration-300">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-text-tertiary text-sm">{accountName}</p>
-                  <p className={`text-2xl font-bold mt-1 ${
+                  <p className={`text-2xl font-display mt-1 ${
                     isCredit
                       ? (balance <= 0 ? 'text-positive' : 'text-negative')
                       : (balance >= 0 ? 'text-positive' : 'text-negative')
                   }`}>
                     {formatCurrency(Math.abs(balance))}
-                    {isCredit && balance > 0 && <span className="text-sm font-normal ml-1">owed</span>}
+                    {isCredit && balance > 0 && <span className="text-sm font-sans font-normal ml-1 text-text-muted">owed</span>}
                   </p>
                 </div>
-                <div className="p-3 rounded-full bg-background">
+                <div className="p-3 rounded-full bg-surface-hover/50">
                   {isCredit ? (
-                    <svg className="w-6 h-6 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                    <svg className="w-5 h-5 text-text-tertiary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
                     </svg>
                   ) : (
-                    <svg className="w-6 h-6 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    <svg className="w-5 h-5 text-text-tertiary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                   )}
                 </div>
@@ -164,113 +167,66 @@ export default function Dashboard() {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 opacity-0 animate-fade-in-up stagger-2">
         <KpiCard
           title="Total Balance"
           value={kpis.total_balance}
           type="default"
-          icon={
-            <svg className="w-6 h-6 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          }
+          icon={<svg className="w-5 h-5 text-text-tertiary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
         />
         <KpiCard
           title="Month-to-Date Spending"
           value={kpis.monthly_spending}
           type="expense"
-          icon={
-            <svg className="w-6 h-6 text-negative" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" />
-            </svg>
-          }
+          icon={<svg className="w-5 h-5 text-negative/70" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" /></svg>}
         />
         <KpiCard
           title="Net Cash Flow"
           value={kpis.net_cash_flow}
           type="dynamic"
           subtitle="This month"
-          icon={
-            <svg className="w-6 h-6 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-            </svg>
-          }
+          icon={<svg className="w-5 h-5 text-text-tertiary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>}
         />
       </div>
 
       {/* Charts Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Cash Flow Bar Chart */}
-        <div className="bg-surface rounded-xl shadow-sm border border-border p-6">
-          <h2 className="text-lg font-bold text-text-primary mb-4">Cash Flow</h2>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 opacity-0 animate-fade-in-up stagger-3">
+        {/* Cash Flow */}
+        <div className="glass-card rounded-xl p-6">
+          <h2 className="text-lg font-semibold text-text-primary mb-4">Cash Flow</h2>
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={cashFlow} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#E5E5E5" />
-                <XAxis
-                  dataKey="month"
-                  tickFormatter={formatMonth}
-                  tick={{ fill: '#737373', fontSize: 12 }}
-                />
-                <YAxis
-                  tickFormatter={(v) => `$${v/1000}k`}
-                  tick={{ fill: '#737373', fontSize: 12 }}
-                />
-                <Tooltip
-                  formatter={(value) => formatCurrency(value)}
-                  contentStyle={{
-                    backgroundColor: 'white',
-                    border: '1px solid #E5E5E5',
-                    borderRadius: '8px',
-                  }}
-                />
+                <CartesianGrid strokeDasharray="3 3" stroke={GRID_COLOR} />
+                <XAxis dataKey="month" tickFormatter={formatMonth} tick={{ fill: TICK_COLOR, fontSize: 12 }} />
+                <YAxis tickFormatter={(v) => `$${v/1000}k`} tick={{ fill: TICK_COLOR, fontSize: 12 }} />
+                <Tooltip formatter={(value) => formatCurrency(value)} contentStyle={TOOLTIP_STYLE} />
                 <Legend />
-                <Bar dataKey="income" name="Income" fill="#22C55E" radius={[4, 4, 0, 0]} cursor="pointer" onClick={handleBarClick} />
-                <Bar dataKey="expenses" name="Expenses" fill="#EF4444" radius={[4, 4, 0, 0]} cursor="pointer" onClick={handleBarClick} />
+                <Bar dataKey="income" name="Income" fill="#34D399" radius={[4, 4, 0, 0]} cursor="pointer" onClick={handleBarClick} />
+                <Bar dataKey="expenses" name="Expenses" fill="#F87171" radius={[4, 4, 0, 0]} cursor="pointer" onClick={handleBarClick} />
               </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
 
-        {/* Spending Risk Tracker */}
         <SpendingRiskTracker />
       </div>
 
       {/* Balance History */}
-      <div className="bg-surface rounded-xl shadow-sm border border-border p-6">
-        <h2 className="text-lg font-bold text-text-primary mb-4">Balance History (Last 30 Days)</h2>
+      <div className="glass-card rounded-xl p-6 opacity-0 animate-fade-in-up stagger-4">
+        <h2 className="text-lg font-semibold text-text-primary mb-4">Balance History (Last 30 Days)</h2>
         <div className="h-64">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={balanceHistory} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#E5E5E5" />
-              <XAxis
-                dataKey="date"
-                tickFormatter={formatDate}
-                tick={{ fill: '#737373', fontSize: 12 }}
-                interval="preserveStartEnd"
-              />
-              <YAxis
-                tickFormatter={(v) => `$${(v/1000).toFixed(0)}k`}
-                tick={{ fill: '#737373', fontSize: 12 }}
-              />
+              <CartesianGrid strokeDasharray="3 3" stroke={GRID_COLOR} />
+              <XAxis dataKey="date" tickFormatter={formatDate} tick={{ fill: TICK_COLOR, fontSize: 12 }} interval="preserveStartEnd" />
+              <YAxis tickFormatter={(v) => `$${(v/1000).toFixed(0)}k`} tick={{ fill: TICK_COLOR, fontSize: 12 }} />
               <Tooltip
                 formatter={(value) => formatCurrency(value)}
                 labelFormatter={(label) => new Date(label).toLocaleDateString()}
-                contentStyle={{
-                  backgroundColor: 'white',
-                  border: '1px solid #E5E5E5',
-                  borderRadius: '8px',
-                }}
+                contentStyle={TOOLTIP_STYLE}
               />
-              <Line
-                type="monotone"
-                dataKey="balance"
-                name="Balance"
-                stroke="#171717"
-                strokeWidth={2}
-                dot={false}
-                activeDot={{ r: 6, fill: '#171717' }}
-              />
+              <Line type="monotone" dataKey="balance" name="Balance" stroke="#D4A853" strokeWidth={2} dot={false} activeDot={{ r: 6, fill: '#D4A853', stroke: '#0C0C14', strokeWidth: 2 }} />
             </LineChart>
           </ResponsiveContainer>
         </div>
@@ -278,9 +234,9 @@ export default function Dashboard() {
 
       {/* Budget Alerts */}
       {dashboard?.budget_alerts?.length > 0 && (
-        <div className="bg-red-50 border border-red-200 rounded-xl p-6">
-          <h2 className="text-lg font-bold text-red-700 mb-3 flex items-center gap-2">
-            <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+        <div className="rounded-xl p-6 bg-negative/5 border border-negative/20 opacity-0 animate-fade-in-up stagger-5">
+          <h2 className="text-lg font-semibold text-negative mb-3 flex items-center gap-2">
+            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
               <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
             </svg>
             Budget Alerts
@@ -288,8 +244,8 @@ export default function Dashboard() {
           <ul className="space-y-2">
             {dashboard.budget_alerts.map((alert) => (
               <li key={alert.category_name} className="flex items-center justify-between text-sm">
-                <span className="font-medium text-red-800">{alert.category_name}</span>
-                <span className="text-red-600">
+                <span className="font-medium text-negative">{alert.category_name}</span>
+                <span className="text-negative/80">
                   {alert.percentage_used.toFixed(0)}% used ({formatCurrency(alert.spent)} / {formatCurrency(alert.monthly_limit)})
                 </span>
               </li>
