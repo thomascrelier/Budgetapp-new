@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import api from '@/lib/api';
 
 export default function BudgetSettings() {
@@ -71,7 +72,7 @@ export default function BudgetSettings() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center animate-fade-in">
+      <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-semibold text-text-primary">Budget Settings</h1>
           <p className="text-text-tertiary mt-1">Set spending limits by category</p>
@@ -138,44 +139,58 @@ export default function BudgetSettings() {
         </div>
       )}
 
-      {showForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowForm(false)} />
-          <div className="relative glass-card rounded-xl shadow-2xl w-full max-w-md mx-4 p-4 md:p-6">
-            <h2 className="text-lg font-semibold text-text-primary mb-4">Create Budget</h2>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-text-secondary mb-2">Category</label>
-                <select value={formData.category_name} onChange={(e) => setFormData({ ...formData, category_name: e.target.value })} required className={inputClasses}>
-                  <option value="">Select a category</option>
-                  {availableCategories.map((cat) => (<option key={cat} value={cat}>{cat}</option>))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-text-secondary mb-2">Monthly Limit</label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-text-tertiary">$</span>
-                  <input type="number" min="0" step="1" value={formData.monthly_limit} onChange={(e) => setFormData({ ...formData, monthly_limit: parseFloat(e.target.value) || 0 })} required className={`${inputClasses} pl-8`} placeholder="500" />
+      <AnimatePresence>
+        {showForm && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center">
+            <motion.div
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowForm(false)}
+            />
+            <motion.div
+              className="relative glass-card rounded-xl shadow-2xl w-full max-w-md mx-4 p-4 md:p-6"
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+            >
+              <h2 className="text-lg font-semibold text-text-primary mb-4">Create Budget</h2>
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-text-secondary mb-2">Category</label>
+                  <select value={formData.category_name} onChange={(e) => setFormData({ ...formData, category_name: e.target.value })} required className={inputClasses}>
+                    <option value="">Select a category</option>
+                    {availableCategories.map((cat) => (<option key={cat} value={cat}>{cat}</option>))}
+                  </select>
                 </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-text-secondary mb-2">Alert Threshold (%)</label>
-                <input type="number" min="0" max="100" value={formData.alert_threshold} onChange={(e) => setFormData({ ...formData, alert_threshold: parseInt(e.target.value) || 80 })} className={inputClasses} />
-                <p className="text-xs text-text-muted mt-1">You'll be alerted when spending reaches this percentage</p>
-              </div>
-              {error && (
-                <div className="p-3 bg-negative/10 border border-negative/20 rounded-lg text-sm text-negative">{error}</div>
-              )}
-              <div className="flex justify-end gap-3 pt-4">
-                <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 text-text-secondary hover:text-text-primary transition-colors">Cancel</button>
-                <button type="submit" disabled={submitting || !formData.category_name || !formData.monthly_limit} className="px-4 py-2 bg-accent text-background rounded-lg font-semibold hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm">
-                  {submitting ? 'Creating...' : 'Create Budget'}
-                </button>
-              </div>
-            </form>
+                <div>
+                  <label className="block text-sm font-medium text-text-secondary mb-2">Monthly Limit</label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-text-tertiary">$</span>
+                    <input type="number" min="0" step="1" value={formData.monthly_limit} onChange={(e) => setFormData({ ...formData, monthly_limit: parseFloat(e.target.value) || 0 })} required className={`${inputClasses} pl-8`} placeholder="500" />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-text-secondary mb-2">Alert Threshold (%)</label>
+                  <input type="number" min="0" max="100" value={formData.alert_threshold} onChange={(e) => setFormData({ ...formData, alert_threshold: parseInt(e.target.value) || 80 })} className={inputClasses} />
+                  <p className="text-xs text-text-muted mt-1">You'll be alerted when spending reaches this percentage</p>
+                </div>
+                {error && (
+                  <div className="p-3 bg-negative/10 border border-negative/20 rounded-lg text-sm text-negative">{error}</div>
+                )}
+                <div className="flex justify-end gap-3 pt-4">
+                  <motion.button type="button" whileTap={{ scale: 0.97 }} onClick={() => setShowForm(false)} className="px-4 py-2 text-text-secondary hover:text-text-primary transition-colors">Cancel</motion.button>
+                  <motion.button type="submit" whileTap={{ scale: 0.97 }} disabled={submitting || !formData.category_name || !formData.monthly_limit} className="px-4 py-2 bg-accent text-background rounded-lg font-semibold hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm">
+                    {submitting ? 'Creating...' : 'Create Budget'}
+                  </motion.button>
+                </div>
+              </form>
+            </motion.div>
           </div>
-        </div>
-      )}
+        )}
+      </AnimatePresence>
     </div>
   );
 }
