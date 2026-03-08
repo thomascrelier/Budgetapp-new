@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
 import {
   BarChart,
   Bar,
@@ -12,15 +13,8 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from 'recharts';
-
-const GRID_COLOR = '#2A2A3C';
-const TICK_COLOR = '#6E6E85';
-const TOOLTIP_STYLE = {
-  backgroundColor: '#161622',
-  border: '1px solid #2A2A3C',
-  borderRadius: '8px',
-  boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
-};
+import { useChartTheme } from './ThemeProvider';
+import PageTransition from './PageTransition';
 
 const formatCurrency = (value) => {
   return new Intl.NumberFormat('en-US', {
@@ -47,7 +41,17 @@ const formatDayOnly = (dateStr) => {
   return day.toString();
 };
 
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: { opacity: 1, transition: { staggerChildren: 0.08 } },
+};
+const itemVariants = {
+  hidden: { opacity: 0, y: 12 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: 'easeOut' } },
+};
+
 export default function MonthDetail({ month, selectedAccount, onBack }) {
+  const { gridColor, tickColor, tooltipStyle, positiveColor, negativeColor, accentColor } = useChartTheme();
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState(null);
 
@@ -98,9 +102,10 @@ export default function MonthDetail({ month, selectedAccount, onBack }) {
   const topTransactions = data.top_transactions || [];
 
   return (
+    <PageTransition>
     <div className="space-y-8">
       {/* Header */}
-      <div className="flex items-center justify-between animate-fade-in">
+      <div className="flex items-center justify-between">
         <button onClick={onBack} className="flex items-center gap-2 text-text-tertiary hover:text-accent transition-colors text-sm font-medium">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -111,8 +116,8 @@ export default function MonthDetail({ month, selectedAccount, onBack }) {
       </div>
 
       {/* KPI Row */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 opacity-0 animate-fade-in-up stagger-1">
-        <div className="glass-card rounded-xl p-6">
+      <motion.div className="grid grid-cols-1 md:grid-cols-3 gap-4" variants={containerVariants} initial="hidden" whileInView="visible" viewport={{ once: true }}>
+        <motion.div className="glass-card rounded-xl p-6" variants={itemVariants}>
           <div className="flex items-center justify-between">
             <div>
               <p className="text-text-tertiary text-sm font-medium">Income</p>
@@ -124,9 +129,9 @@ export default function MonthDetail({ month, selectedAccount, onBack }) {
               </svg>
             </div>
           </div>
-        </div>
+        </motion.div>
 
-        <div className="glass-card rounded-xl p-6">
+        <motion.div className="glass-card rounded-xl p-6" variants={itemVariants}>
           <div className="flex items-center justify-between">
             <div>
               <p className="text-text-tertiary text-sm font-medium">Expenses</p>
@@ -138,9 +143,9 @@ export default function MonthDetail({ month, selectedAccount, onBack }) {
               </svg>
             </div>
           </div>
-        </div>
+        </motion.div>
 
-        <div className="glass-card rounded-xl p-6">
+        <motion.div className="glass-card rounded-xl p-6" variants={itemVariants}>
           <div className="flex items-center justify-between">
             <div>
               <p className="text-text-tertiary text-sm font-medium">Net Cash Flow</p>
@@ -152,52 +157,52 @@ export default function MonthDetail({ month, selectedAccount, onBack }) {
               </svg>
             </div>
           </div>
-        </div>
-      </div>
+        </motion.div>
+      </motion.div>
 
       {/* Charts Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 opacity-0 animate-fade-in-up stagger-2">
-        <div className="glass-card rounded-xl p-6">
+      <motion.div className="grid grid-cols-1 lg:grid-cols-2 gap-6" variants={containerVariants} initial="hidden" whileInView="visible" viewport={{ once: true }}>
+        <motion.div className="glass-card rounded-xl p-6" variants={itemVariants}>
           <h2 className="text-lg font-semibold text-text-primary mb-4">Spending by Category</h2>
           {categoryChartData.length > 0 ? (
             <div style={{ height: Math.max(250, categoryChartData.length * 36) }}>
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={categoryChartData} layout="vertical" margin={{ top: 0, right: 10, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={GRID_COLOR} horizontal={false} />
-                  <XAxis type="number" tickFormatter={(v) => `$${(v / 1000).toFixed(v >= 1000 ? 1 : 0)}${v >= 1000 ? 'k' : ''}`} tick={{ fill: TICK_COLOR, fontSize: 12 }} />
-                  <YAxis type="category" dataKey="category" width={120} tick={{ fill: '#A0A0B5', fontSize: 12 }} />
-                  <Tooltip formatter={(value) => formatCurrency(value)} contentStyle={TOOLTIP_STYLE} labelStyle={{ color: '#F0F0F5', fontWeight: 600 }} />
-                  <Bar dataKey="amount" name="Spending" fill="#D4A853" radius={[0, 4, 4, 0]} />
+                  <CartesianGrid strokeDasharray="3 3" stroke={gridColor} horizontal={false} />
+                  <XAxis type="number" tickFormatter={(v) => `$${(v / 1000).toFixed(v >= 1000 ? 1 : 0)}${v >= 1000 ? 'k' : ''}`} tick={{ fill: tickColor, fontSize: 12 }} />
+                  <YAxis type="category" dataKey="category" width={120} tick={{ fill: tickColor, fontSize: 12 }} />
+                  <Tooltip formatter={(value) => formatCurrency(value)} contentStyle={tooltipStyle} labelStyle={{ color: tickColor, fontWeight: 600 }} />
+                  <Bar dataKey="amount" name="Spending" fill={accentColor} radius={[0, 4, 4, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
           ) : (
             <div className="flex items-center justify-center h-64 text-text-tertiary">No expense data for this month</div>
           )}
-        </div>
+        </motion.div>
 
-        <div className="glass-card rounded-xl p-6">
+        <motion.div className="glass-card rounded-xl p-6" variants={itemVariants}>
           <h2 className="text-lg font-semibold text-text-primary mb-4">Daily Spending</h2>
           {dailyData.length > 0 ? (
             <div className="h-64" style={{ height: Math.max(250, categoryChartData.length * 36) }}>
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={dailyData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={GRID_COLOR} />
-                  <XAxis dataKey="date" tickFormatter={formatDayOnly} tick={{ fill: TICK_COLOR, fontSize: 12 }} interval="preserveStartEnd" />
-                  <YAxis tickFormatter={(v) => `$${(v / 1000).toFixed(v >= 1000 ? 1 : 0)}${v >= 1000 ? 'k' : ''}`} tick={{ fill: TICK_COLOR, fontSize: 12 }} />
-                  <Tooltip formatter={(value, name) => [formatCurrency(value), name === 'cumulative' ? 'Cumulative' : 'Daily']} labelFormatter={(label) => formatShortDate(label)} contentStyle={TOOLTIP_STYLE} />
-                  <Line type="monotone" dataKey="cumulative" name="cumulative" stroke="#D4A853" strokeWidth={2} dot={false} activeDot={{ r: 6, fill: '#D4A853', stroke: '#0C0C14', strokeWidth: 2 }} />
+                  <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
+                  <XAxis dataKey="date" tickFormatter={formatDayOnly} tick={{ fill: tickColor, fontSize: 12 }} interval="preserveStartEnd" />
+                  <YAxis tickFormatter={(v) => `$${(v / 1000).toFixed(v >= 1000 ? 1 : 0)}${v >= 1000 ? 'k' : ''}`} tick={{ fill: tickColor, fontSize: 12 }} />
+                  <Tooltip formatter={(value, name) => [formatCurrency(value), name === 'cumulative' ? 'Cumulative' : 'Daily']} labelFormatter={(label) => formatShortDate(label)} contentStyle={tooltipStyle} />
+                  <Line type="monotone" dataKey="cumulative" name="cumulative" stroke={accentColor} strokeWidth={2} dot={false} activeDot={{ r: 6, fill: accentColor, stroke: '#0C0C14', strokeWidth: 2 }} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
           ) : (
             <div className="flex items-center justify-center h-64 text-text-tertiary">No spending data for this month</div>
           )}
-        </div>
-      </div>
+        </motion.div>
+      </motion.div>
 
       {/* Top Transactions */}
-      <div className="glass-card rounded-xl overflow-hidden opacity-0 animate-fade-in-up stagger-3">
+      <motion.div className="glass-card rounded-xl overflow-hidden" variants={containerVariants} initial="hidden" whileInView="visible" viewport={{ once: true }}>
         <div className="px-6 py-4 border-b border-border/50">
           <h2 className="text-lg font-semibold text-text-primary">Top Transactions</h2>
         </div>
@@ -227,7 +232,8 @@ export default function MonthDetail({ month, selectedAccount, onBack }) {
             </tbody>
           </table>
         </div>
-      </div>
+      </motion.div>
     </div>
+    </PageTransition>
   );
 }

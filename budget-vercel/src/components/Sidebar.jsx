@@ -1,6 +1,8 @@
 'use client';
 
 import { signOut } from 'next-auth/react';
+import { useTheme } from './ThemeProvider';
+import { motion, LayoutGroup } from 'framer-motion';
 
 const navItems = [
   { id: 'dashboard', label: 'Dashboard', icon: HomeIcon },
@@ -65,7 +67,14 @@ function RefreshIcon() {
   );
 }
 
+const sidebarGradientStyle = {
+  background: `linear-gradient(180deg, var(--sidebar-from) 0%, var(--sidebar-to) 100%)`,
+  borderRight: `1px solid var(--sidebar-border)`,
+};
+
 export default function Sidebar({ currentPage, onPageChange, onUploadClick, onRefreshClick, user, isOpen, onToggle }) {
+  const { theme, toggleTheme } = useTheme();
+
   const handleNavClick = (pageId) => {
     onPageChange(pageId);
     if (typeof window !== 'undefined' && window.innerWidth < 768) {
@@ -81,10 +90,7 @@ export default function Sidebar({ currentPage, onPageChange, onUploadClick, onRe
 
       <div className={`fixed left-0 top-0 h-full w-64 flex flex-col z-40 transform transition-transform duration-300 md:translate-x-0 ${
         isOpen ? 'translate-x-0' : '-translate-x-full'
-      }`} style={{
-        background: 'linear-gradient(180deg, #12121E 0%, #0E0E18 100%)',
-        borderRight: '1px solid rgba(42, 42, 60, 0.5)',
-      }}>
+      }`} style={sidebarGradientStyle}>
         <div className="p-6 border-b border-border/50">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-lg bg-accent/10 flex items-center justify-center">
@@ -98,31 +104,42 @@ export default function Sidebar({ currentPage, onPageChange, onUploadClick, onRe
         </div>
 
         <nav className="flex-1 p-3 space-y-0.5">
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = currentPage === item.id;
-            return (
-              <button
-                key={item.id}
-                onClick={() => handleNavClick(item.id)}
-                className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all duration-200 ${
-                  isActive
-                    ? 'bg-accent/10 text-accent'
-                    : 'text-text-tertiary hover:text-text-secondary hover:bg-surface-hover/50'
-                }`}
-              >
-                <Icon />
-                <span className="text-sm font-medium">{item.label}</span>
-              </button>
-            );
-          })}
+          <LayoutGroup>
+            {navItems.map((item) => {
+              const Icon = item.icon;
+              const isActive = currentPage === item.id;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => handleNavClick(item.id)}
+                  className={`relative w-full flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all duration-200 ${
+                    isActive
+                      ? 'text-accent'
+                      : 'text-text-tertiary hover:text-text-secondary hover:bg-surface-hover/50'
+                  }`}
+                >
+                  {isActive && (
+                    <motion.div
+                      layoutId="activeNav"
+                      className="absolute inset-0 bg-accent/10 rounded-lg"
+                      transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+                    />
+                  )}
+                  <span className="relative z-10 flex items-center gap-3">
+                    <Icon />
+                    <span className="text-sm font-medium">{item.label}</span>
+                  </span>
+                </button>
+              );
+            })}
+          </LayoutGroup>
         </nav>
 
         <div className="p-3 border-t border-border/50 space-y-2">
-          <button onClick={onUploadClick} className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-accent text-background rounded-lg text-sm font-semibold hover:bg-accent-hover transition-colors">
+          <motion.button whileTap={{ scale: 0.97 }} onClick={onUploadClick} className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-accent text-background rounded-lg text-sm font-semibold hover:bg-accent-hover transition-colors">
             <UploadIcon />
             Upload CSV
-          </button>
+          </motion.button>
           <button onClick={onRefreshClick} className="w-full flex items-center justify-center gap-2 px-4 py-2 text-text-tertiary border border-border rounded-lg text-sm font-medium hover:bg-surface-hover hover:text-text-secondary transition-colors">
             <RefreshIcon />
             Refresh Data
@@ -144,7 +161,19 @@ export default function Sidebar({ currentPage, onPageChange, onUploadClick, onRe
                 <p className="text-xs text-text-muted truncate">{user.email}</p>
               </div>
             </div>
-            <button onClick={() => signOut({ callbackUrl: '/login' })} className="w-full mt-3 flex items-center justify-center gap-2 px-3 py-1.5 text-xs text-text-muted hover:text-text-secondary hover:bg-surface-hover rounded-lg transition-colors">
+            <button
+              onClick={toggleTheme}
+              className="w-full flex items-center gap-3 px-3 py-2 mt-3 rounded-lg text-text-tertiary hover:text-text-secondary hover:bg-surface-hover/50 transition-all duration-200"
+            >
+              <motion.div
+                animate={{ rotate: theme === 'dark' ? 0 : 180 }}
+                transition={{ type: 'spring', stiffness: 200, damping: 15 }}
+              >
+                {theme === 'dark' ? <SunIcon /> : <MoonIcon />}
+              </motion.div>
+              <span className="text-sm">{theme === 'dark' ? 'Light Mode' : 'Dark Mode'}</span>
+            </button>
+            <button onClick={() => signOut({ callbackUrl: '/login' })} className="w-full mt-1 flex items-center justify-center gap-2 px-3 py-1.5 text-xs text-text-muted hover:text-text-secondary hover:bg-surface-hover rounded-lg transition-colors">
               <LogoutIcon />
               Sign Out
             </button>
@@ -152,5 +181,21 @@ export default function Sidebar({ currentPage, onPageChange, onUploadClick, onRe
         )}
       </div>
     </>
+  );
+}
+
+function SunIcon() {
+  return (
+    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" />
+    </svg>
+  );
+}
+
+function MoonIcon() {
+  return (
+    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M21.752 15.002A9.718 9.718 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z" />
+    </svg>
   );
 }

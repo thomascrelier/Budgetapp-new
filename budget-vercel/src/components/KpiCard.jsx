@@ -1,5 +1,7 @@
 'use client';
 
+import { motion } from 'framer-motion';
+
 export default function KpiCard({ title, value, type = 'default', subtitle, icon }) {
   const formatCurrency = (val) => {
     if (val === undefined || val === null) return '$0';
@@ -25,7 +27,11 @@ export default function KpiCard({ title, value, type = 'default', subtitle, icon
   };
 
   return (
-    <div className="glass-card rounded-xl p-6 hover:shadow-lg hover:shadow-black/20 transition-all duration-300">
+    <motion.div
+      whileHover={{ y: -2 }}
+      transition={{ duration: 0.2 }}
+      className="glass-card rounded-xl p-6"
+    >
       <div className="flex items-center justify-between">
         <div>
           <p className="text-text-tertiary text-sm font-medium tracking-wide">{title}</p>
@@ -42,6 +48,6 @@ export default function KpiCard({ title, value, type = 'default', subtitle, icon
           </div>
         )}
       </div>
-    </div>
+    </motion.div>
   );
 }

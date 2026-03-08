@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
 
 const formatCurrency = (value) => {
   return new Intl.NumberFormat('en-US', {
@@ -11,7 +12,7 @@ const formatCurrency = (value) => {
   }).format(value);
 };
 
-function CategoryTrend({ data, months }) {
+function CategoryTrend({ data, months, categoryIndex }) {
   const maxAmount = Math.max(...data.months.map(m => m.amount), 1);
   const change = data.change_percent;
   const isDown = change < 0;
@@ -49,11 +50,14 @@ function CategoryTrend({ data, months }) {
                 {months[i].label}
               </span>
               <div className="flex-1 h-4 bg-surface-hover rounded overflow-hidden">
-                <div
-                  className={`h-full rounded transition-all duration-500 ${
+                <motion.div
+                  initial={{ width: 0 }}
+                  whileInView={{ width: `${Math.max(width, 1)}%` }}
+                  viewport={{ once: true }}
+                  transition={{ type: 'spring', stiffness: 80, damping: 15, delay: categoryIndex * 0.05 + i * 0.03 }}
+                  className={`h-full rounded ${
                     isCurrent ? 'bg-accent' : 'bg-text-muted/40'
                   }`}
-                  style={{ width: `${Math.max(width, 1)}%` }}
                 />
               </div>
               <span className="text-[10px] text-text-muted w-10 text-right flex-shrink-0">
@@ -128,8 +132,8 @@ export default function SpendingRiskTracker({ selectedAccount }) {
       <h2 className="text-lg font-semibold text-text-primary mb-1">Spending Tracker</h2>
       <p className="text-xs text-text-muted mb-4">3-month trend for key categories</p>
 
-      {data?.categories?.map((cat) => (
-        <CategoryTrend key={cat.category} data={cat} months={data.months} />
+      {data?.categories?.map((cat, index) => (
+        <CategoryTrend key={cat.category} data={cat} months={data.months} categoryIndex={index} />
       ))}
     </div>
   );

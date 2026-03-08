@@ -1,5 +1,7 @@
 'use client';
 
+import { motion } from 'framer-motion';
+
 export default function BudgetProgressBar({ category, spent, limit, percentage, status }) {
   const formatCurrency = (val) => {
     return new Intl.NumberFormat('en-US', {
@@ -31,9 +33,12 @@ export default function BudgetProgressBar({ category, spent, limit, percentage, 
         </span>
       </div>
       <div className={`h-2 rounded-full ${getStatusBgColor()}`}>
-        <div
-          className={`h-full rounded-full transition-all ${getStatusColor()}`}
-          style={{ width: `${Math.min(percentage, 100)}%` }}
+        <motion.div
+          initial={{ width: 0 }}
+          whileInView={{ width: `${Math.min(percentage, 100)}%` }}
+          viewport={{ once: true }}
+          transition={{ type: 'spring', stiffness: 60, damping: 15, delay: 0.2 }}
+          className={`h-full rounded-full ${getStatusColor()}`}
         />
       </div>
       <div className="flex justify-between mt-1">
