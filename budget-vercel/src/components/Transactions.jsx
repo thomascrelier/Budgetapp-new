@@ -1,7 +1,9 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { motion } from 'framer-motion';
 import api from '@/lib/api';
+import PageTransition from './PageTransition';
 
 export default function Transactions() {
   const [loading, setLoading] = useState(true);
@@ -124,9 +126,10 @@ export default function Transactions() {
   const inputClasses = 'w-full px-3 py-1.5 border border-border rounded-lg bg-surface text-text-primary text-sm focus:outline-none focus:ring-1 focus:ring-accent/50 focus:border-accent/50';
 
   return (
+    <PageTransition>
     <div className="space-y-6">
       {/* Page Header */}
-      <div className="flex justify-between items-center animate-fade-in">
+      <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-semibold text-text-primary">Transactions</h1>
           <p className="text-text-tertiary mt-1">
@@ -134,9 +137,9 @@ export default function Transactions() {
           </p>
         </div>
         {hasActiveFilters && (
-          <button onClick={clearFilters} className="px-3 py-1.5 text-sm border border-border rounded-lg hover:bg-surface-hover transition-colors text-text-secondary">
+          <motion.button whileTap={{ scale: 0.97 }} onClick={clearFilters} className="px-3 py-1.5 text-sm border border-border rounded-lg hover:bg-surface-hover transition-colors text-text-secondary">
             Clear filters
-          </button>
+          </motion.button>
         )}
       </div>
 
@@ -204,8 +207,14 @@ export default function Transactions() {
                     <td colSpan={5} className="px-3 py-12 md:px-6 text-center text-text-tertiary">No transactions found</td>
                   </tr>
                 ) : (
-                  transactions.map((transaction) => (
-                    <tr key={transaction.id} className="hover:bg-surface-hover/50 transition-colors">
+                  transactions.map((transaction, index) => (
+                    <motion.tr
+                      key={transaction.id}
+                      initial={{ opacity: 0, x: -8 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ duration: 0.2, delay: index * 0.02 }}
+                      className="hover:bg-surface-hover/50 transition-colors"
+                    >
                       <td className="px-3 py-2 md:px-6 md:py-4 whitespace-nowrap text-sm text-text-secondary">{transaction.date}</td>
                       <td className="px-3 py-2 md:px-6 md:py-4 whitespace-nowrap text-sm text-text-tertiary">{transaction.account_name}</td>
                       <td className="px-3 py-2 md:px-6 md:py-4 text-sm text-text-primary max-w-md truncate">{transaction.description}</td>
@@ -218,8 +227,8 @@ export default function Transactions() {
                         {editingId === transaction.id ? (
                           <div className="flex items-center gap-2">
                             <input type="text" value={customCategory} onChange={(e) => setCustomCategory(e.target.value)} placeholder="Enter category" className="px-2 py-1 border border-border rounded bg-surface text-text-primary text-sm focus:outline-none focus:ring-1 focus:ring-accent/50" autoFocus onKeyDown={(e) => { if (e.key === 'Enter') handleCustomCategorySubmit(transaction.id); if (e.key === 'Escape') setEditingId(null); }} />
-                            <button onClick={() => handleCustomCategorySubmit(transaction.id)} className="px-2 py-1 bg-accent text-background rounded text-xs font-semibold hover:bg-accent-hover">Save</button>
-                            <button onClick={() => setEditingId(null)} className="px-2 py-1 text-text-tertiary hover:text-text-primary text-xs">Cancel</button>
+                            <motion.button whileTap={{ scale: 0.97 }} onClick={() => handleCustomCategorySubmit(transaction.id)} className="px-2 py-1 bg-accent text-background rounded text-xs font-semibold hover:bg-accent-hover">Save</motion.button>
+                            <motion.button whileTap={{ scale: 0.97 }} onClick={() => setEditingId(null)} className="px-2 py-1 text-text-tertiary hover:text-text-primary text-xs">Cancel</motion.button>
                           </div>
                         ) : (
                           <select
@@ -235,7 +244,7 @@ export default function Transactions() {
                           </select>
                         )}
                       </td>
-                    </tr>
+                    </motion.tr>
                   ))
                 )}
               </tbody>
@@ -249,12 +258,13 @@ export default function Transactions() {
               Showing {page * limit + 1} to {Math.min((page + 1) * limit, total)} of {total}
             </p>
             <div className="flex gap-2">
-              <button onClick={() => setPage(Math.max(0, page - 1))} disabled={page === 0} className="px-3 py-1 border border-border rounded text-sm text-text-secondary hover:bg-surface-hover disabled:opacity-30 disabled:cursor-not-allowed transition-colors">Previous</button>
-              <button onClick={() => setPage(Math.min(totalPages - 1, page + 1))} disabled={page >= totalPages - 1} className="px-3 py-1 border border-border rounded text-sm text-text-secondary hover:bg-surface-hover disabled:opacity-30 disabled:cursor-not-allowed transition-colors">Next</button>
+              <motion.button whileTap={{ scale: 0.97 }} onClick={() => setPage(Math.max(0, page - 1))} disabled={page === 0} className="px-3 py-1 border border-border rounded text-sm text-text-secondary hover:bg-surface-hover disabled:opacity-30 disabled:cursor-not-allowed transition-colors">Previous</motion.button>
+              <motion.button whileTap={{ scale: 0.97 }} onClick={() => setPage(Math.min(totalPages - 1, page + 1))} disabled={page >= totalPages - 1} className="px-3 py-1 border border-border rounded text-sm text-text-secondary hover:bg-surface-hover disabled:opacity-30 disabled:cursor-not-allowed transition-colors">Next</motion.button>
             </div>
           </div>
         )}
       </div>
     </div>
+    </PageTransition>
   );
 }
