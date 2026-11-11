@@ -2,7 +2,7 @@
 
 ## Current State
 
-- **13,238 transactions** | **36 accounts** | **50 categories** | **0 uncategorized**
+- **13,367 transactions** | **36 accounts** | **50 categories** | **0 uncategorized**
 - **Date range:** Sep 12, 2016 — Nov 10, 2026
 - **Data source:** Google Sheets (live, sole copy — the SQLite backup no longer exists)
 - **Frontend:** Next.js on Vercel — https://budgetapp-new.vercel.app
@@ -33,8 +33,8 @@ Mint CSV Export → import_csv.py → SQLite → sync_to_sheets.py → Google Sh
 | Groceries | 1,352 | $46,729 |
 | Dining | 1,106 | $64,157 |
 | Shopping | 787 | $76,521 |
+| Mortgage | 658 | $611,125 |
 | Transportation | 641 | $61,112 |
-| Mortgage | 619 | $598,329 |
 | Travel | 512 | $165,022 |
 | Fast Food | 421 | $4,489 |
 | Alcohol & Bars | 410 | $15,064 |
@@ -44,21 +44,21 @@ Mint CSV Export → import_csv.py → SQLite → sync_to_sheets.py → Google Sh
 | Car Fuel | 274 | $13,937 |
 | Pharmacy | 235 | $9,317 |
 | Pets | 206 | $18,637 |
-| Electricity | 191 | $25,005 |
+| Electricity | 200 | $26,653 |
+| Gas | 138 | $12,469 |
 | Internet | 133 | $8,043 |
-| Gas | 129 | $11,806 |
 | Home Improvement | 114 | $24,391 |
 | Therapy | 70 | $12,386 |
+| Property Tax | 70 | $45,208 |
 | Mobile | 62 | $7,665 |
-| Property Tax | 61 | $41,052 |
 | Debt Payment | 60 | $38,838 |
 | Gym Membership | 59 | $4,114 |
-| Water | 46 | $10,481 |
+| Water | 49 | $11,194 |
+| Repairs & Maintenance | 44 | $9,086 |
 | Donations | 44 | $4,495 |
 | Dentist | 41 | $13,309 |
 | Gaming & Video Games | 41 | $565 |
 | Renovations | 38 | $64,486 |
-| Repairs & Maintenance | 37 | $6,687 |
 | Insurance | 37 | $4,798 |
 | Eyecare | 27 | $5,100 |
 | Rent | 26 | $39,165 |
@@ -78,11 +78,11 @@ Mint CSV Export → import_csv.py → SQLite → sync_to_sheets.py → Google Sh
 
 | Category | Txns | Total |
 |---|---|---|
-| Property Tax | 61 | $41,052 |
+| Property Tax | 70 | $45,208 |
 | Income Tax | 12 | $21,232 |
-| Electricity | 191 | $25,005 |
-| Gas | 129 | $11,806 |
-| Water | 46 | $10,481 |
+| Electricity | 200 | $26,653 |
+| Gas | 138 | $12,469 |
+| Water | 49 | $11,194 |
 | Internet | 133 | $8,043 |
 | Mobile | 62 | $7,665 |
 | Pharmacy | 235 | $9,317 |
@@ -95,13 +95,13 @@ Mint CSV Export → import_csv.py → SQLite → sync_to_sheets.py → Google Sh
 
 | Category | Txns | Received |
 |---|---|---|
-| Transfers & Payments | 1,601 | $4,490,886 |
+| Transfers & Payments | 1,605 | $4,490,886 |
 | Investments | 1,534 | $1,831,571 |
 | Income | 533 | $1,380,602 |
-| Fees & Charges | 426 | $5,610 |
-| Rental Income | 113 | $160,582 |
+| Fees & Charges | 444 | $5,763 |
+| Rental Income | 143 | $203,641 |
 | Transfer | 62 | $53,874 |
-| Other | 3 | $1,845 |
+| Other | 4 | $1,894 |
 
 ---
 
@@ -151,6 +151,7 @@ Same Google credentials go in `budget-vercel/.env.local` (not currently present;
 8. Added rental property dashboard with T776 tax summary
 9. Zero uncategorized transactions remaining
 10. Imported CIBC chequing + Visa through Nov 10, 2026 (747 rows, deduplicated)
+11. Imported CIBC Rental through Nov 9, 2026 (129 rows, batch `cibc-rental-2026-11-11`)
 
 ---
 
