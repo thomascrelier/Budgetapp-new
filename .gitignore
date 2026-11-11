@@ -1,6 +1,5 @@
 # Dependencies
 node_modules/
-frontend/node_modules/
 
 # Python
 __pycache__/
@@ -11,6 +10,8 @@ __pycache__/
 venv/
 backend/venv/
 .env
+.env.local
+.env*.local
 *.egg-info/
 .pytest_cache/
 
@@ -30,6 +31,8 @@ backend/venv/
 Thumbs.db
 
 # Build outputs
+.next/
+.vercel/
 dist/
 build/
 *.egg
@@ -42,5 +45,4 @@ npm-debug.log*
 coverage/
 .coverage
 htmlcov/
-Budget-App/
 .worktrees/
