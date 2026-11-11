@@ -12,14 +12,18 @@
   --border: #E8E2D9;
   --border-dark: #D4CFC7;
   --text-primary: #1A1814;
-  --text-secondary: #6B6560;
-  --text-tertiary: #9C9590;
-  --text-muted: #C4BFB8;
+  --text-secondary: #5E5852;
+  --text-tertiary: #6E6862;
+  --text-muted: #77706A;
+  --text-faint: #C4BFB8; /* decorative only: dividers, disabled glyphs; never readable text */
   --accent: #D4A853;
   --accent-hover: #C49A45;
-  --positive: #16A34A;
+  --accent-text: #8C6A1F; /* gold for text and icons on light surfaces (5:1) */
+  --on-accent: #1A1814;
+  --focus-ring: #8C6A1F;
+  --positive: #15803D;
   --negative: #DC2626;
-  --warning: #D97706;
+  --warning: #B45309;
   --info: #2563EB;
   --glass-bg: rgba(255, 255, 255, 0.7);
   --glass-border: rgba(232, 226, 217, 0.6);
@@ -43,10 +47,14 @@
   --border-dark: #3A3A4C;
   --text-primary: #F0F0F5;
   --text-secondary: #A0A0B5;
-  --text-tertiary: #6E6E85;
-  --text-muted: #4A4A5C;
+  --text-tertiary: #8A8AA0;
+  --text-muted: #7E7E95;
+  --text-faint: #4A4A5C;
   --accent: #D4A853;
   --accent-hover: #E0BC6E;
+  --accent-text: #D4A853;
+  --on-accent: #0C0C14;
+  --focus-ring: #D4A853;
   --positive: #34D399;
   --negative: #F87171;
   --warning: #FBBF24;
@@ -64,17 +72,59 @@
   --scrollbar-thumb-hover: #3A3A4C;
 }
 
-/* Theme transition */
-*,
-*::before,
-*::after {
-  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease, fill 0.3s ease, stroke 0.3s ease;
+/* Theme transition: only while the theme is actually switching (ThemeProvider sets the class for ~350ms).
+   A permanent transition on every element made each hover and re-render animate colors and fought Framer Motion. */
+html.theme-switching *,
+html.theme-switching *::before,
+html.theme-switching *::after {
+  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease, fill 0.3s ease, stroke 0.3s ease !important;
 }
 
-.no-transition *,
-.no-transition *::before,
-.no-transition *::after {
-  transition: none !important;
+/* Browser surfaces */
+::selection {
+  background: color-mix(in srgb, var(--accent) 35%, transparent);
+  color: var(--text-primary);
+}
+
+html {
+  caret-color: var(--accent-text);
+  color-scheme: light;
+  -webkit-font-smoothing: antialiased;
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline-offset: 0;
+}
+
+/* Money columns line up */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+  }
+  .animate-spin {
+    animation-duration: 1.5s !important;
+    animation-iteration-count: infinite !important;
+  }
 }
 
 /* Display font */
@@ -83,18 +133,22 @@
   font-style: italic;
 }
 
-/* Glass card */
+/* Card surface. Previously frosted glass over a flat background (blur had nothing to blur, cost paint on
+   every card) with a hover state on non-interactive cards. Interactive cards add .card-interactive. */
 .glass-card {
-  background: var(--glass-bg);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid var(--glass-border);
-  transition: background-color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: 0 1px 2px var(--shadow-color), 0 4px 16px var(--shadow-color);
 }
 
-.glass-card:hover {
+.card-interactive {
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.2s ease;
+}
+
+.card-interactive:hover {
   background: var(--surface-hover);
-  border-color: var(--border);
+  border-color: var(--border-dark);
 }
 
 /* Gradient border */
@@ -146,10 +200,9 @@
 }
 
 /* Dark form controls */
-[data-theme="dark"] input,
-[data-theme="dark"] select,
-[data-theme="dark"] textarea {
-  color-scheme: dark;
+::placeholder {
+  color: var(--text-muted);
+  opacity: 1;
 }
 
 /* Recharts tooltip override */

@@ -10,7 +10,7 @@ const pageVariants = {
 
 const pageTransition = {
   duration: 0.3,
-  ease: 'easeOut',
+  ease: [0.16, 1, 0.3, 1], // exponential ease-out
 };
 
 export default function PageTransition({ children, className = '' }) {

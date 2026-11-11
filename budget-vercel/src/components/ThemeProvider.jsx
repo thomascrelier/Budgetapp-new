@@ -1,6 +1,7 @@
 'use client';
 
 import { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import { MotionConfig } from 'framer-motion';
 
 const ThemeContext = createContext({ theme: 'dark', setTheme: () => {}, toggleTheme: () => {} });
 
@@ -39,6 +40,11 @@ export default function ThemeProvider({ children }) {
   }, [theme, mounted]);
 
   const setTheme = useCallback((newTheme) => {
+    // Animate colors only during the switch itself (see globals.css).
+    const root = document.documentElement;
+    root.classList.add('theme-switching');
+    window.clearTimeout(window.__themeSwitchTimer);
+    window.__themeSwitchTimer = window.setTimeout(() => root.classList.remove('theme-switching'), 350);
     setThemeState(newTheme);
     localStorage.setItem('theme', newTheme);
   }, []);
@@ -53,7 +59,8 @@ export default function ThemeProvider({ children }) {
 
   return (
     <ThemeContext.Provider value={{ theme, setTheme, toggleTheme }}>
-      {children}
+      {/* reducedMotion="user": Framer Motion drops transform/layout motion when the OS asks, keeps opacity fades */}
+      <MotionConfig reducedMotion="user">{children}</MotionConfig>
     </ThemeContext.Provider>
   );
 }
@@ -63,7 +70,7 @@ export function useChartTheme() {
   const isDark = theme === 'dark';
   return {
     gridColor: isDark ? '#2A2A3C' : '#E8E2D9',
-    tickColor: isDark ? '#6E6E85' : '#9C9590',
+    tickColor: isDark ? '#8A8AA0' : '#6E6862',
     tooltipStyle: {
       backgroundColor: isDark ? '#161622' : '#FFFFFF',
       border: `1px solid ${isDark ? '#2A2A3C' : '#E8E2D9'}`,
@@ -72,10 +79,11 @@ export function useChartTheme() {
         ? '0 8px 32px rgba(0,0,0,0.4)'
         : '0 8px 32px rgba(180,168,150,0.12)',
     },
-    positiveColor: isDark ? '#34D399' : '#16A34A',
+    positiveColor: isDark ? '#34D399' : '#15803D',
     negativeColor: isDark ? '#F87171' : '#DC2626',
     accentColor: '#D4A853',
-    warningColor: isDark ? '#FBBF24' : '#D97706',
+    accentTextColor: isDark ? '#D4A853' : '#8C6A1F',
+    warningColor: isDark ? '#FBBF24' : '#B45309',
     infoColor: isDark ? '#60A5FA' : '#2563EB',
     pieColors: isDark
       ? ['#D4A853', '#34D399', '#60A5FA', '#F87171', '#A78BFA', '#FBBF24', '#6E6E85', '#4A4A5C']

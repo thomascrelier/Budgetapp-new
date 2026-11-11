@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   BarChart,
   Bar,
@@ -13,30 +13,94 @@ import {
   ResponsiveContainer,
   Legend,
 } from 'recharts';
-import { motion } from 'framer-motion';
+import { useReducedMotion } from 'framer-motion';
 import api from '@/lib/api';
 import KpiCard from './KpiCard';
 import SpendingRiskTracker from './SpendingRiskTracker';
 import MonthDetail from './MonthDetail';
 import { useChartTheme } from './ThemeProvider';
 import PageTransition from './PageTransition';
+import { formatMoney, formatMoneyCompact } from './AnimatedNumber';
 
-const containerVariants = {
-  hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: { staggerChildren: 0.08 },
-  },
-};
+const ACCOUNT_NAMES = ['Main Chequing', 'CIBC Visa', 'Rogers Mastercard'];
 
-const itemVariants = {
-  hidden: { opacity: 0, y: 12 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: 'easeOut' } },
+// 'YYYY-MM' and 'YYYY-MM-DD' are calendar dates, not instants. `new Date('2026-11-03')` parses as UTC
+// midnight and renders as Nov 2 in North American time zones, so build local dates from the parts.
+const parseMonth = (monthStr) => {
+  const [y, m] = String(monthStr).split('-').map(Number);
+  return new Date(y, m - 1, 1);
 };
+const parseDay = (dateStr) => {
+  const [y, m, d] = String(dateStr).slice(0, 10).split('-').map(Number);
+  return new Date(y, m - 1, d);
+};
+const monthShort = (s) => parseMonth(s).toLocaleDateString('en-CA', { month: 'short' });
+const monthLong = (s) => parseMonth(s).toLocaleDateString('en-CA', { month: 'long', year: 'numeric' });
+const dayShort = (s) => parseDay(s).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' });
+const dayLong = (s) => parseDay(s).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' });
+
+function SectionHeader({ id, title, children }) {
+  return (
+    <div className="mb-4">
+      <h2 id={id} className="text-lg font-semibold text-text-primary">{title}</h2>
+      {children && <p className="mt-0.5 text-sm text-text-tertiary">{children}</p>}
+    </div>
+  );
+}
+
+function EmptyChart({ children }) {
+  return (
+    <div className="flex h-64 items-center justify-center rounded-lg border border-dashed border-border px-6 text-center text-sm text-text-tertiary">
+      {children}
+    </div>
+  );
+}
+
+function DashboardSkeleton() {
+  const block = 'rounded bg-surface-hover';
+  return (
+    <div className="space-y-6" aria-busy="true">
+      <span className="sr-only" role="status">Loading dashboard</span>
+      <div aria-hidden="true" className="animate-pulse space-y-6">
+        <div className="space-y-2">
+          <div className={`${block} h-8 w-40`} />
+          <div className={`${block} h-4 w-64`} />
+        </div>
+        {[0, 1].map((strip) => (
+          <div key={strip} className="glass-card grid grid-cols-1 divide-y divide-border rounded-xl sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+            {[0, 1, 2].map((cell) => (
+              <div key={cell} className="space-y-2 px-6 py-5">
+                <div className={`${block} h-4 w-28`} />
+                <div className={`${block} h-8 w-32`} />
+              </div>
+            ))}
+          </div>
+        ))}
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          {[0, 1].map((card) => (
+            <div key={card} className="glass-card space-y-4 rounded-xl p-6">
+              <div className={`${block} h-5 w-32`} />
+              <div className={`${block} h-64`} />
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function Dashboard() {
-  const { gridColor, tickColor, tooltipStyle, positiveColor, negativeColor, accentColor } = useChartTheme();
+  const {
+    gridColor,
+    tickColor,
+    tooltipStyle,
+    positiveColor,
+    negativeColor,
+    accentTextColor,
+  } = useChartTheme();
+  const reduceMotion = useReducedMotion();
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [dashboard, setDashboard] = useState(null);
   const [cashFlow, setCashFlow] = useState([]);
   const [balanceHistory, setBalanceHistory] = useState([]);
@@ -44,12 +108,9 @@ export default function Dashboard() {
   const [selectedMonth, setSelectedMonth] = useState(null);
   const [personalAccountIds, setPersonalAccountIds] = useState(null);
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
+    setLoadError(false);
     try {
       const accountsRes = await api.getAccounts();
       const allAccounts = accountsRes.accounts || [];
@@ -74,40 +135,35 @@ export default function Dashboard() {
       setBalanceHistory(balanceRes.data || []);
     } catch (error) {
       console.error('Failed to load dashboard data:', error);
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const formatCurrency = (value) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(value);
-  };
-
-  const formatMonth = (monthStr) => {
-    const [year, month] = monthStr.split('-');
-    const date = new Date(year, month - 1);
-    return date.toLocaleDateString('en-US', { month: 'short' });
-  };
-
-  const formatDate = (dateStr) => {
-    const date = new Date(dateStr);
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  };
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   if (loading) {
+    return <DashboardSkeleton />;
+  }
+
+  if (loadError) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-2 border-accent border-t-transparent"></div>
+      <div role="alert" className="glass-card mx-auto mt-8 max-w-md rounded-xl p-8 text-center">
+        <h1 className="text-lg font-semibold text-text-primary">Couldn&rsquo;t load your dashboard</h1>
+        <p className="mt-1 text-sm text-text-secondary">Check your connection, then try again.</p>
+        <button
+          type="button"
+          onClick={loadData}
+          className="mt-5 min-h-11 rounded-lg bg-accent px-5 text-sm font-semibold text-on-accent transition-colors hover:bg-accent-hover"
+        >
+          Try again
+        </button>
       </div>
     );
   }
-
-  const kpis = dashboard?.kpis || {};
 
   if (selectedMonth) {
     return (
@@ -119,185 +175,230 @@ export default function Dashboard() {
     );
   }
 
+  const kpis = dashboard?.kpis || {};
+
   const handleBarClick = (data) => {
     if (data?.month) {
       setSelectedMonth(data.month);
     }
   };
 
+  // Text alternatives for the charts
+  const cashFlowSummary = cashFlow.length
+    ? `Income and expenses by month, ${monthLong(cashFlow[0].month)} to ${monthLong(cashFlow[cashFlow.length - 1].month)}. ` +
+      cashFlow
+        .map(m => `${monthLong(m.month)}: income ${formatMoney(m.income)}, expenses ${formatMoney(m.expenses)}`)
+        .join('; ') + '.'
+    : '';
+
+  const firstBalance = balanceHistory[0];
+  const lastBalance = balanceHistory[balanceHistory.length - 1];
+  const balanceChange = firstBalance && lastBalance ? lastBalance.balance - firstBalance.balance : null;
+  const balanceSummary = firstBalance && lastBalance
+    ? `Balance went from ${formatMoney(firstBalance.balance)} on ${dayLong(firstBalance.date)} to ${formatMoney(lastBalance.balance)} on ${dayLong(lastBalance.date)}.`
+    : '';
+
+  const axisTick = { fill: tickColor, fontSize: 12 };
+  const tooltipLabelStyle = { color: 'var(--text-primary)', fontWeight: 600, marginBottom: 4 };
+
   return (
     <PageTransition>
-    <div className="space-y-8">
+    <div className="space-y-6">
       {/* Page Header */}
       <div>
         <h1 className="text-3xl font-semibold text-text-primary">Dashboard</h1>
-        <p className="text-text-tertiary mt-1">Overview of your financial health</p>
+        <p className="mt-1 text-text-tertiary">Overview of your financial health</p>
       </div>
 
-      {/* Account Balance Cards */}
-      <motion.div
-        variants={containerVariants}
-        initial="hidden"
-        whileInView="visible"
-        viewport={{ once: true, margin: '-50px' }}
-        className="grid grid-cols-1 sm:grid-cols-3 gap-4"
-      >
-        {['Main Chequing', 'CIBC Visa', 'Rogers Mastercard'].map((accountName) => {
-          const account = accounts.find(a => a.name === accountName);
-          const balance = account ? parseFloat(account.current_balance) : 0;
-          const isCredit = ['visa', 'credit', 'mastercard'].some(k => accountName.toLowerCase().includes(k));
+      {/* This month: one surface, three figures */}
+      <section aria-label="This month" className="glass-card grid grid-cols-1 divide-y divide-border rounded-xl sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+        <KpiCard title="Total Balance" value={kpis.total_balance} />
+        <KpiCard title="Month-to-Date Spending" value={kpis.monthly_spending} />
+        <KpiCard title="Net Cash Flow" value={kpis.net_cash_flow} signed subtitle="This month" />
+      </section>
 
-          return (
-            <motion.div key={accountName} variants={itemVariants} className="glass-card rounded-xl p-5 hover:shadow-lg hover:shadow-black/20 transition-all duration-300">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-text-tertiary text-sm">{accountName}</p>
-                  <p className={`text-2xl font-display mt-1 ${
-                    isCredit
-                      ? (balance <= 0 ? 'text-positive' : 'text-negative')
-                      : (balance >= 0 ? 'text-positive' : 'text-negative')
-                  }`}>
-                    {formatCurrency(Math.abs(balance))}
-                    {isCredit && balance > 0 && <span className="text-sm font-sans font-normal ml-1 text-text-muted">owed</span>}
-                  </p>
-                </div>
-                <div className="p-3 rounded-full bg-surface-hover/50">
-                  {isCredit ? (
-                    <svg className="w-5 h-5 text-text-tertiary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-                    </svg>
-                  ) : (
-                    <svg className="w-5 h-5 text-text-tertiary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                  )}
-                </div>
-              </div>
-              {!account && (
-                <p className="text-xs text-text-muted mt-2">Account not found</p>
-              )}
-            </motion.div>
-          );
-        })}
-      </motion.div>
+      {/* Account balances */}
+      <section aria-labelledby="accounts-title" className="glass-card rounded-xl">
+        <h2 id="accounts-title" className="px-5 pt-4 text-sm font-medium text-text-secondary sm:px-6">Accounts</h2>
+        <div className="grid grid-cols-1 divide-y divide-border sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+          {ACCOUNT_NAMES.map((accountName) => {
+            const account = accounts.find(a => a.name === accountName);
+            const balance = account ? parseFloat(account.current_balance) : null;
+            const isCredit = ['visa', 'credit', 'mastercard'].some(k => accountName.toLowerCase().includes(k));
 
-      {/* KPI Cards */}
-      <motion.div
-        variants={containerVariants}
-        initial="hidden"
-        whileInView="visible"
-        viewport={{ once: true, margin: '-50px' }}
-        className="grid grid-cols-1 md:grid-cols-3 gap-4"
-      >
-        <motion.div variants={itemVariants}>
-          <KpiCard
-            title="Total Balance"
-            value={kpis.total_balance}
-            type="default"
-            icon={<svg className="w-5 h-5 text-text-tertiary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
-          />
-        </motion.div>
-        <motion.div variants={itemVariants}>
-          <KpiCard
-            title="Month-to-Date Spending"
-            value={kpis.monthly_spending}
-            type="expense"
-            icon={<svg className="w-5 h-5 text-negative/70" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" /></svg>}
-          />
-        </motion.div>
-        <motion.div variants={itemVariants}>
-          <KpiCard
-            title="Net Cash Flow"
-            value={kpis.net_cash_flow}
-            type="dynamic"
-            subtitle="This month"
-            icon={<svg className="w-5 h-5 text-text-tertiary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>}
-          />
-        </motion.div>
-      </motion.div>
+            let tone = 'neutral';
+            let annotation;
+            let shown = balance;
+            if (balance !== null && isCredit) {
+              shown = Math.abs(balance);
+              if (balance > 0) { tone = 'negative'; annotation = 'owed'; }
+              else if (balance < 0) { tone = 'positive'; annotation = 'credit'; }
+            } else if (balance !== null && balance < 0) {
+              tone = 'negative';
+              annotation = 'overdrawn';
+            }
+
+            return (
+              <KpiCard
+                key={accountName}
+                title={accountName}
+                value={shown}
+                tone={tone}
+                annotation={annotation}
+                size="sm"
+                subtitle={!account ? 'Account not found' : undefined}
+                className="pt-2 sm:pt-2"
+              />
+            );
+          })}
+        </div>
+      </section>
 
       {/* Charts Row */}
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true, margin: '-50px' }}
-        transition={{ duration: 0.4, ease: 'easeOut' }}
-        className="grid grid-cols-1 lg:grid-cols-2 gap-6"
-      >
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         {/* Cash Flow */}
-        <div className="glass-card rounded-xl p-6">
-          <h2 className="text-lg font-semibold text-text-primary mb-4">Cash Flow</h2>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={cashFlow} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
-                <XAxis dataKey="month" tickFormatter={formatMonth} tick={{ fill: tickColor, fontSize: 12 }} />
-                <YAxis tickFormatter={(v) => `$${v/1000}k`} tick={{ fill: tickColor, fontSize: 12 }} />
-                <Tooltip formatter={(value) => formatCurrency(value)} contentStyle={tooltipStyle} />
-                <Legend />
-                <Bar dataKey="income" name="Income" fill={positiveColor} radius={[4, 4, 0, 0]} cursor="pointer" onClick={handleBarClick} />
-                <Bar dataKey="expenses" name="Expenses" fill={negativeColor} radius={[4, 4, 0, 0]} cursor="pointer" onClick={handleBarClick} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
+        <section aria-labelledby="cash-flow-title" className="glass-card min-w-0 rounded-xl p-6">
+          <SectionHeader id="cash-flow-title" title="Cash Flow">
+            Last {cashFlow.length || 6} months. Select a month for its details.
+          </SectionHeader>
+          {cashFlow.length === 0 ? (
+            <EmptyChart>No income or expenses in the last 6 months yet. Upload a statement to see cash flow.</EmptyChart>
+          ) : (
+            <>
+              <div className="h-64" role="img" aria-label={cashFlowSummary}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={cashFlow} margin={{ top: 10, right: 4, left: 0, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke={gridColor} vertical={false} />
+                    <XAxis dataKey="month" tickFormatter={monthShort} tick={axisTick} stroke={gridColor} tickLine={false} />
+                    <YAxis tickFormatter={formatMoneyCompact} tick={axisTick} width={56} axisLine={false} tickLine={false} />
+                    <Tooltip
+                      formatter={(value) => formatMoney(value)}
+                      labelFormatter={monthLong}
+                      contentStyle={tooltipStyle}
+                      labelStyle={tooltipLabelStyle}
+                      cursor={{ fill: gridColor, fillOpacity: 0.5 }}
+                    />
+                    <Legend
+                      iconType="circle"
+                      iconSize={8}
+                      wrapperStyle={{ fontSize: 12, paddingTop: 8 }}
+                      formatter={(label) => <span style={{ color: tickColor }}>{label}</span>}
+                    />
+                    <Bar dataKey="income" name="Income" fill={positiveColor} radius={[4, 4, 0, 0]} cursor="pointer" onClick={handleBarClick} isAnimationActive={!reduceMotion} />
+                    <Bar dataKey="expenses" name="Expenses" fill={negativeColor} radius={[4, 4, 0, 0]} cursor="pointer" onClick={handleBarClick} isAnimationActive={!reduceMotion} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+
+              {/* Keyboard and touch path into a month; also the readable net per month */}
+              <ul className="mt-4 grid grid-cols-3 gap-1 sm:grid-cols-6" aria-label="Open a month">
+                {cashFlow.map((m) => {
+                  const net = m.net ?? (m.income - m.expenses);
+                  return (
+                    <li key={m.month}>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedMonth(m.month)}
+                        aria-label={`${monthLong(m.month)}: net ${formatMoney(net, { signed: true })}. Open details`}
+                        className="flex min-h-11 w-full flex-col items-center justify-center rounded-lg px-1 py-1.5 transition-colors hover:bg-surface-hover"
+                      >
+                        <span className="text-xs font-medium text-text-secondary">{monthShort(m.month)}</span>
+                        <span className={`tabular text-xs ${net > 0 ? 'text-positive' : net < 0 ? 'text-negative' : 'text-text-muted'}`}>
+                          {formatMoneyCompact(net).replace(/^\$/, net > 0 ? '+$' : '$')}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </>
+          )}
+        </section>
 
         <SpendingRiskTracker />
-      </motion.div>
+      </div>
 
       {/* Balance History */}
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true, margin: '-50px' }}
-        transition={{ duration: 0.4, ease: 'easeOut' }}
-      >
-        <div className="glass-card rounded-xl p-6">
-          <h2 className="text-lg font-semibold text-text-primary mb-4">Balance History (Last 30 Days)</h2>
-          <div className="h-64">
+      <section aria-labelledby="balance-title" className="glass-card min-w-0 rounded-xl p-6">
+        <SectionHeader id="balance-title" title="Balance History">
+          {lastBalance ? (
+            <>
+              Last 30 days.{' '}
+              <span className="tabular text-text-secondary">{formatMoney(lastBalance.balance)}</span> today
+              {balanceChange !== null && (
+                <>
+                  ,{' '}
+                  <span className={`tabular font-medium ${balanceChange > 0 ? 'text-positive' : balanceChange < 0 ? 'text-negative' : 'text-text-secondary'}`}>
+                    {formatMoney(balanceChange, { signed: true })}
+                  </span>{' '}
+                  since {dayShort(firstBalance.date)}
+                </>
+              )}
+              .
+            </>
+          ) : (
+            'Last 30 days'
+          )}
+        </SectionHeader>
+        {balanceHistory.length === 0 ? (
+          <EmptyChart>No balance history for the last 30 days yet.</EmptyChart>
+        ) : (
+          <div className="h-64" role="img" aria-label={balanceSummary}>
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={balanceHistory} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
-                <XAxis dataKey="date" tickFormatter={formatDate} tick={{ fill: tickColor, fontSize: 12 }} interval="preserveStartEnd" />
-                <YAxis tickFormatter={(v) => `$${(v/1000).toFixed(0)}k`} tick={{ fill: tickColor, fontSize: 12 }} />
+              <LineChart data={balanceHistory} margin={{ top: 10, right: 4, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke={gridColor} vertical={false} />
+                <XAxis dataKey="date" tickFormatter={dayShort} tick={axisTick} interval="preserveStartEnd" minTickGap={24} stroke={gridColor} tickLine={false} />
+                <YAxis tickFormatter={formatMoneyCompact} tick={axisTick} width={56} axisLine={false} tickLine={false} domain={['auto', 'auto']} />
                 <Tooltip
-                  formatter={(value) => formatCurrency(value)}
-                  labelFormatter={(label) => new Date(label).toLocaleDateString()}
+                  formatter={(value) => formatMoney(value)}
+                  labelFormatter={dayLong}
                   contentStyle={tooltipStyle}
+                  labelStyle={tooltipLabelStyle}
+                  cursor={{ stroke: tickColor, strokeDasharray: '3 3' }}
                 />
-                <Line type="monotone" dataKey="balance" name="Balance" stroke={accentColor} strokeWidth={2} dot={false} activeDot={{ r: 6, fill: accentColor, stroke: '#0C0C14', strokeWidth: 2 }} />
+                <Line
+                  type="monotone"
+                  dataKey="balance"
+                  name="Balance"
+                  stroke={accentTextColor}
+                  strokeWidth={2}
+                  dot={false}
+                  activeDot={{ r: 5, fill: accentTextColor, stroke: tooltipStyle.backgroundColor, strokeWidth: 2 }}
+                  isAnimationActive={!reduceMotion}
+                />
               </LineChart>
             </ResponsiveContainer>
           </div>
-        </div>
-      </motion.div>
+        )}
+      </section>
 
       {/* Budget Alerts */}
       {dashboard?.budget_alerts?.length > 0 && (
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: '-50px' }}
-          transition={{ duration: 0.4, ease: 'easeOut' }}
-          className="rounded-xl p-6 bg-negative/5 border border-negative/20"
-        >
-          <h2 className="text-lg font-semibold text-negative mb-3 flex items-center gap-2">
-            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+        <section aria-labelledby="alerts-title" className="rounded-xl border border-negative/25 bg-negative/5 p-6">
+          <h2 id="alerts-title" className="mb-3 flex items-center gap-2 text-lg font-semibold text-negative">
+            <svg aria-hidden="true" className="h-5 w-5 shrink-0" fill="currentColor" viewBox="0 0 20 20">
               <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
             </svg>
             Budget Alerts
           </h2>
-          <ul className="space-y-2">
+          <ul className="divide-y divide-negative/15">
             {dashboard.budget_alerts.map((alert) => (
-              <li key={alert.category_name} className="flex items-center justify-between text-sm">
-                <span className="font-medium text-negative">{alert.category_name}</span>
-                <span className="text-negative/80">
-                  {alert.percentage_used.toFixed(0)}% used ({formatCurrency(alert.spent)} / {formatCurrency(alert.monthly_limit)})
+              <li key={alert.category_name} className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-0.5 py-2 text-sm">
+                <span className="font-medium text-text-primary">{alert.category_name}</span>
+                <span className="tabular text-text-secondary">
+                  {(() => {
+                    const pct = Math.round(Number(alert.percentage_used) || 0);
+                    // Over the limit reads as a problem; nearing it is a warning, not the same red.
+                    return pct >= 100
+                      ? <span className="font-semibold text-negative">{pct}% used, over</span>
+                      : <span className="font-semibold text-warning">{pct}% used</span>;
+                  })()}
+                  {' '}({formatMoney(alert.spent)} of {formatMoney(alert.monthly_limit)})
                 </span>
               </li>
             ))}
           </ul>
-        </motion.div>
+        </section>
       )}
     </div>
     </PageTransition>
