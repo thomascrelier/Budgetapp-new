@@ -48,3 +48,30 @@ test('same file twice: nothing new', () => {
   expect(p.new).toHaveLength(0);
   expect(p.duplicates).toHaveLength(3);
 });
+
+test('a file without a header is always split on commas', () => {
+  // Without the pin, a one-line export whose description holds semicolons was split on ";".
+  const r = parseBankCsv('2026-10-01,STORE;A;B;C;D,5.00,');
+  expect(r.format).toBe('cibc-account');
+  expect(r.rows).toEqual([{ line: 1, date: '2026-10-01', description: 'STORE;A;B;C;D', amount: -5 }]);
+  expect(r.errors).toEqual([]);
+});
+test('a malformed quote is reported and that row skipped', () => {
+  const r = parseBankCsv('2026-10-01,A,5.00,\n2026-10-02,"B" x",6.00,\n2026-10-03,C,7.00,\n');
+  expect(r.rows.map(x => x.line)).toEqual([1, 3]);
+  expect(r.errors).toEqual([{ line: 2, reason: expect.stringMatching(/quote/i) }]);
+});
+test('an unclosed quote stops the import with one clear error', () => {
+  const r = parseBankCsv('2026-10-01,A,5.00,\n2026-10-02,"B unclosed,6.00,\n2026-10-03,C,7.00,\n');
+  expect(r.rows).toEqual([]);
+  expect(r.errors).toEqual([
+    { line: 2, reason: 'The file has an unclosed quote near line 2 — export it again from the bank.', file: true },
+  ]);
+});
+test('header columns match case-insensitively on the words they contain', () => {
+  const a = parseBankCsv('Transaction Date,Description,Amount (CAD)\n2026-11-02,COFFEE,-4.50\n');
+  expect(a.rows).toEqual([{ line: 2, date: '2026-11-02', description: 'COFFEE', amount: -4.5 }]);
+  // "Debit Amount" and "Credit Amount" are debit and credit columns, not a signed amount column.
+  const b = parseBankCsv('POSTING DATE,Payee Name,Debit Amount,Credit Amount\n2026-11-02,COFFEE,4.50,\n2026-11-03,REFUND,,4.50\n');
+  expect(b.rows.map(r => [r.description, r.amount])).toEqual([['COFFEE', -4.5], ['REFUND', 4.5]]);
+});

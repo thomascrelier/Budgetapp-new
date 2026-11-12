@@ -275,8 +275,9 @@ export async function initializeDefaultAccounts() {
 
 // ============ TRANSACTIONS ============
 
-// Returns every data row, including rows with parse errors.
-async function fetchTransactionsFromSheets() {
+// { values, transactions }: the raw rows (header included) and every parsed data row, including rows
+// with parse errors.
+async function readTransactionSheet() {
   const sheets = await getSheets();
 
   const response = await sheets.spreadsheets.values.get({
@@ -285,14 +286,18 @@ async function fetchTransactionsFromSheets() {
     ...READ_OPTIONS,
   });
 
-  const rows = response.data.values || [];
-  const parsed = [];
-  for (let i = 1; i < rows.length; i++) {
-    const row = rows[i];
+  const values = response.data.values || [];
+  const transactions = [];
+  for (let i = 1; i < values.length; i++) {
+    const row = values[i];
     if (!row || row.every(c => c === '' || c === null || c === undefined)) continue;
-    parsed.push(parseTransactionRow(row, i + 1));
+    transactions.push(parseTransactionRow(row, i + 1));
   }
-  return parsed;
+  return { values, transactions };
+}
+
+async function fetchTransactionsFromSheets() {
+  return (await readTransactionSheet()).transactions;
 }
 
 async function getCachedTransactionRows() {
@@ -365,6 +370,27 @@ function colLetter(n) {
   return String.fromCharCode(64 + n);
 }
 
+// values.get leaves out trailing empty rows, so `rows.length` (header included) is the last row holding
+// anything. Appending at the row after it, instead of letting Sheets look for the end of a "table", keeps
+// a cleared row in the middle of the data from ending the table early and new rows landing on old ones.
+export function appendRangeAfter(tab, rows) {
+  return `${tab}!A${(rows ? rows.length : 0) + 1}`;
+}
+
+async function appendRows(sheets, tab, existingRows, values) {
+  await sheets.spreadsheets.values.append({
+    spreadsheetId: SPREADSHEET_ID,
+    range: appendRangeAfter(tab, existingRows),
+    valueInputOption: 'RAW',
+    insertDataOption: 'INSERT_ROWS',
+    requestBody: { values },
+  });
+}
+
+function sheetErrorMessage(err) {
+  return String(err?.response?.data?.error?.message || err?.message || '');
+}
+
 // Creates the tab (with headers) when missing; writes headers if row 1 is empty.
 // Never touches other rows. Memoized per process once confirmed.
 export async function ensureTab(name, headers) {
@@ -374,18 +400,25 @@ export async function ensureTab(name, headers) {
   const exists = spreadsheet.data.sheets.some(s => s.properties.title === name);
   const lastCol = colLetter(headers.length);
 
+  let created = false;
   if (!exists) {
-    await sheets.spreadsheets.batchUpdate({
-      spreadsheetId: SPREADSHEET_ID,
-      requestBody: { requests: [{ addSheet: { properties: { title: name } } }] },
-    });
+    try {
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId: SPREADSHEET_ID,
+        requestBody: { requests: [{ addSheet: { properties: { title: name } } }] },
+      });
+      created = true;
+    } catch (err) {
+      // Two first requests at once: the other one made the tab between our check and our addSheet.
+      if (!/already exists/i.test(sheetErrorMessage(err))) throw err;
+    }
   }
-  const first = exists
-    ? await sheets.spreadsheets.values.get({
+  const first = created
+    ? null
+    : await sheets.spreadsheets.values.get({
         spreadsheetId: SPREADSHEET_ID,
         range: `${name}!A1:${lastCol}1`,
-      })
-    : null;
+      });
   const cells = (first && first.data.values && first.data.values[0]) || [];
   if (cells.every(c => String(c ?? '').trim() === '')) {
     await sheets.spreadsheets.values.update({
@@ -440,12 +473,7 @@ export async function setSetting(key, value) {
       requestBody: { values: [[String(value)]] },
     });
   } else {
-    await sheets.spreadsheets.values.append({
-      spreadsheetId: SPREADSHEET_ID,
-      range: `${SHEETS.SETTINGS}!A:B`,
-      valueInputOption: 'RAW',
-      requestBody: { values: [[key, String(value)]] },
-    });
+    await appendRows(sheets, SHEETS.SETTINGS, rows, [[key, String(value)]]);
   }
   invalidateCache('settings');
 }
@@ -500,12 +528,7 @@ export async function saveTenant(t) {
       requestBody: { values: [values] },
     });
   } else {
-    await sheets.spreadsheets.values.append({
-      spreadsheetId: SPREADSHEET_ID,
-      range: `${SHEETS.TENANTS}!A:${colLetter(TENANT_HEADERS.length)}`,
-      valueInputOption: 'RAW',
-      requestBody: { values: [values] },
-    });
+    await appendRows(sheets, SHEETS.TENANTS, rows, [values]);
   }
   invalidateCache('tenants');
   return parseTenantRow(values);
@@ -542,12 +565,7 @@ export async function linkReceipt(link) {
       requestBody: { values: [values] },
     });
   } else {
-    await sheets.spreadsheets.values.append({
-      spreadsheetId: SPREADSHEET_ID,
-      range: `${SHEETS.RECEIPTS}!A:E`,
-      valueInputOption: 'RAW',
-      requestBody: { values: [values] },
-    });
+    await appendRows(sheets, SHEETS.RECEIPTS, rows, [values]);
   }
   invalidateCache('receipts');
   return parseReceiptRow(values);
@@ -577,14 +595,25 @@ export async function getAllTransactions() {
   return (await getCachedTransactionRows()).filter(t => t.parse_error === null);
 }
 
+// Straight from the sheet, never the cache: for checks that must see rows added since (import duplicates).
+// The result also refreshes the cache.
+export async function getAllTransactionsFresh() {
+  const all = await fetchTransactionsFromSheets();
+  setCache('transactions', all);
+  return all.filter(t => t.parse_error === null);
+}
+
 export async function getParseIssues() {
   return (await getCachedTransactionRows()).filter(t => t.parse_error !== null);
 }
 
-export async function createTransactions(transactionsData) {
+// `verify(freshTransactions)` runs on the same fresh read the append is based on, just before it; it can
+// throw to stop the append (the import commit uses it to refuse when the account changed since the preview).
+export async function createTransactions(transactionsData, { verify } = {}) {
   const sheets = await getSheets();
   // Fresh read so ids never collide with rows added since the cache was filled.
-  const existing = await fetchTransactionsFromSheets();
+  const { values, transactions: existing } = await readTransactionSheet();
+  if (verify) verify(existing.filter(t => t.parse_error === null));
 
   const ids = existing.map(t => t.id).filter(id => id !== null);
   const firstId = ids.length > 0 ? Math.max(...ids) + 1 : 1;
@@ -604,12 +633,7 @@ export async function createTransactions(transactionsData) {
   ]);
 
   if (rows.length > 0) {
-    await sheets.spreadsheets.values.append({
-      spreadsheetId: SPREADSHEET_ID,
-      range: `${SHEETS.TRANSACTIONS}!A:I`,
-      valueInputOption: 'RAW',
-      requestBody: { values: rows },
-    });
+    await appendRows(sheets, SHEETS.TRANSACTIONS, values, rows);
   }
 
   invalidateCache('transactions');
@@ -618,13 +642,16 @@ export async function createTransactions(transactionsData) {
 }
 
 const FIELD_COLUMNS = { category: 'F', notes: 'J', tax_tag: 'K' };
+// Columns added in V2: their header cells are filled in on the first edit if still empty.
+const ADDED_HEADERS = [['J', 9], ['K', 10]];
 
 export async function updateTransactionFields(id, fields) {
   const sheets = await getSheets();
   const targetId = parseInt(id);
 
   // Fresh read: row numbers must be current.
-  const matches = (await fetchTransactionsFromSheets()).filter(t => t.id === targetId);
+  const { values, transactions } = await readTransactionSheet();
+  const matches = transactions.filter(t => t.id === targetId);
   if (matches.length === 0) throw new Error('Transaction not found');
   if (matches.length > 1) throw new Error('Duplicate transaction id');
   const row = matches[0];
@@ -635,6 +662,14 @@ export async function updateTransactionFields(id, fields) {
       range: `${SHEETS.TRANSACTIONS}!${col}${row.row_number}`,
       values: [[fields[name]]],
     }));
+  const header = values[0] || [];
+  if (data.length > 0) {
+    for (const [col, index] of ADDED_HEADERS) {
+      if (String(header[index] ?? '').trim() === '') {
+        data.push({ range: `${SHEETS.TRANSACTIONS}!${col}1`, values: [[TRANSACTION_HEADERS[index]]] });
+      }
+    }
+  }
 
   if (data.length > 0) {
     await sheets.spreadsheets.values.batchUpdate({

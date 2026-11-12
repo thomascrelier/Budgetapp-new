@@ -18,6 +18,8 @@ export default function UploadModal({ isOpen, onClose, onSuccess }) {
   const [uploading, setUploading] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
+  // Why the plan on screen was rebuilt (the account changed between preview and commit).
+  const [notice, setNotice] = useState(null);
   const requestId = useRef(0);
   const previewRef = useRef(null);
 
@@ -35,6 +37,7 @@ export default function UploadModal({ isOpen, onClose, onSuccess }) {
       setPreviewing(false);
       setResult(null);
       setError(null);
+      setNotice(null);
     }
   }, [isOpen]);
 
@@ -110,9 +113,9 @@ export default function UploadModal({ isOpen, onClose, onSuccess }) {
   // A failed re-preview must leave the select matching the plan on screen.
   const revertAccount = () => setSelectedAccount(previewRef.current?.account_id ?? '');
 
-  const runPreview = async (file, accountId) => {
+  const runPreview = async (file, accountId, why = null) => {
     const id = ++requestId.current;
-    setPreviewing(true); setError(null);
+    setPreviewing(true); setError(null); setNotice(why);
     try {
       const data = await api.previewImport(file, accountId);
       if (id !== requestId.current) return;
@@ -156,10 +159,16 @@ export default function UploadModal({ isOpen, onClose, onSuccess }) {
 
   const handleCommit = async () => {
     if (!addCount || !selectedAccount || !planMatchesAccount) return;
-    setUploading(true); setError(null);
+    setUploading(true); setError(null); setNotice(null);
     try {
-      const data = await api.commitImport(selectedAccount, rowsToAdd.map(({ date, description, amount, category }) => ({ date, description, amount, category })));
-      if (data.error) { setError(data.error); }
+      const data = await api.commitImport(
+        selectedAccount,
+        rowsToAdd.map(({ date, description, amount, category }) => ({ date, description, amount, category })),
+        preview.account_version,
+      );
+      // Rows were added or removed since the preview: nothing was written; plan again from the sheet as it is now.
+      if (data.changed) await runPreview(selectedFile, selectedAccount, data.error);
+      else if (data.error) { setError(data.error); }
       else { setResult(data); onSuccess?.(); }
     } catch (err) {
       setError(err.message || 'Import failed');
@@ -226,6 +235,14 @@ export default function UploadModal({ isOpen, onClose, onSuccess }) {
     </div>
   );
 
+  // Collapsed lists in the review: a chevron shows they open (a flex summary has no marker of its own).
+  const summaryClasses = 'cursor-pointer min-h-11 md:min-h-0 flex items-center gap-2 text-text-secondary font-medium list-none [&::-webkit-details-marker]:hidden';
+  const chevron = (
+    <svg className="w-4 h-4 shrink-0 text-text-tertiary transition-transform group-open:rotate-90" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+      <path fillRule="evenodd" d="M7.2 14.8a.75.75 0 0 1 0-1.06L10.94 10 7.2 6.26a.75.75 0 1 1 1.06-1.06l4.27 4.27a.75.75 0 0 1 0 1.06L8.26 14.8a.75.75 0 0 1-1.06 0Z" clipRule="evenodd" />
+    </svg>
+  );
+
   const stat = (label, value) => (
     <div className="rounded-lg border border-border/60 px-3 py-2">
       <dt className="text-xs text-text-tertiary">{label}</dt>
@@ -269,6 +286,10 @@ export default function UploadModal({ isOpen, onClose, onSuccess }) {
         </div>
       </div>
 
+      {notice && (
+        <p role="alert" className="p-3 rounded-lg bg-warning/10 border border-warning/30 text-sm text-text-primary">{notice}</p>
+      )}
+
       {previewing && (
         <p role="status" className="flex items-center gap-2 text-sm text-text-secondary">
           <span className="w-4 h-4 rounded-full border-2 border-current border-t-transparent animate-spin" aria-hidden="true" />
@@ -277,8 +298,9 @@ export default function UploadModal({ isOpen, onClose, onSuccess }) {
       )}
 
       {preview.errors?.length > 0 && (
-        <details className="rounded-lg border border-border/60 px-3 py-2 text-sm">
-          <summary className="cursor-pointer min-h-11 md:min-h-0 flex items-center text-text-secondary font-medium">
+        <details className="group rounded-lg border border-border/60 px-3 py-2 text-sm">
+          <summary className={summaryClasses}>
+            {chevron}
             {plural(preview.errors.length, 'row')} could not be read
           </summary>
           <ul className="mt-2 space-y-1 text-text-tertiary">
@@ -341,6 +363,27 @@ export default function UploadModal({ isOpen, onClose, onSuccess }) {
             </div>
           ) : (
             !preview.message && <p className="mt-4 text-sm text-text-tertiary">No new transactions in this file.</p>
+          )}
+
+          {plan.duplicates.length > 0 && (
+            <details className="group mt-4 rounded-lg border border-border/60 px-3 py-2 text-sm">
+              <summary className={summaryClasses}>
+                {chevron}
+                {plural(plan.duplicates.length, 'row')} already in {accountName}
+              </summary>
+              <ul className="mt-2 divide-y divide-border/60">
+                {plan.duplicates.map((r, i) => (
+                  <li key={i} className="py-2 flex justify-between gap-3">
+                    <span className="min-w-0">
+                      <span className="block text-text-primary break-words">{r.description}</span>
+                      <span className="block text-xs text-text-tertiary tabular">{r.date}</span>
+                    </span>
+                    {amountCell(r.amount)}
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-2 text-text-tertiary">These are skipped, so nothing is added twice.</p>
+            </details>
           )}
 
           {olderRows.length > 0 && (
@@ -444,7 +487,7 @@ export default function UploadModal({ isOpen, onClose, onSuccess }) {
                 <motion.button
                   type="button"
                   whileTap={{ scale: 0.97 }}
-                  onClick={() => { requestId.current += 1; setPreview(null); setError(null); setSelectedAccount(''); }}
+                  onClick={() => { requestId.current += 1; setPreview(null); setError(null); setNotice(null); setSelectedAccount(''); }}
                   disabled={busy}
                   className="min-h-11 md:min-h-10 px-4 py-2 rounded-lg text-sm font-medium text-text-secondary hover:text-text-primary hover:bg-surface-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >

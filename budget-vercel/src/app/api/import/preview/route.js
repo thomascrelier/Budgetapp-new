@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
-import { getAccounts, getAllTransactions, getSettings } from '@/lib/sheets';
+import { getAccounts, getAllTransactionsFresh, getSettings } from '@/lib/sheets';
 import { parseBankCsv } from '@/lib/import/parse';
 import { detectAccount } from '@/lib/import/detect';
 import { planImport } from '@/lib/import/plan';
+import { accountVersion } from '@/lib/import/version';
 import { accountKind, buildHistory } from '@/lib/rules';
 
 const MAX_BYTES = 5 * 1024 * 1024;
@@ -19,8 +20,12 @@ export async function POST(request) {
     }
 
     const { format, rows, errors } = parseBankCsv(await file.text());
+    // A file that can't be read at all (unclosed quote, no date/amount columns) gets one clear message.
+    const unreadable = errors.find((e) => e.file);
+    if (unreadable) return NextResponse.json({ error: unreadable.reason, errors }, { status: 422 });
+    // Duplicates are checked against the sheet as it is now, not the cache (which can miss a recent import).
     const [accounts, transactions, settings] = await Promise.all([
-      getAccounts(false), getAllTransactions(), getSettings(),
+      getAccounts(false), getAllTransactionsFresh(), getSettings(),
     ]);
     const detection = detectAccount(rows, transactions, accounts);
 
@@ -54,6 +59,8 @@ export async function POST(request) {
       detection,
       account_id: account ? account.id : null,
       account_name: account ? account.name : null,
+      // Sent back with the commit, which refuses if the account changed in between.
+      account_version: account ? accountVersion(transactions, account.id) : null,
       plan,
       message,
     });

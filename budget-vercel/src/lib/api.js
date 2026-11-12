@@ -118,11 +118,16 @@ export const api = {
     if (accountId) formData.append('account_id', accountId);
     return fetch(`${API_BASE}/import/preview`, { method: 'POST', body: formData }).then(r => r.json());
   },
-  commitImport: (accountId, rows) => fetch(`${API_BASE}/import/commit`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ account_id: accountId, rows }),
-  }).then(r => r.json()),
+  // Resolves with the JSON body; `changed` is true when the account changed since the preview (409).
+  commitImport: async (accountId, rows, accountVersion) => {
+    const res = await fetch(`${API_BASE}/import/commit`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ account_id: accountId, account_version: accountVersion, rows }),
+    });
+    const data = await res.json();
+    return { ...data, changed: res.status === 409 };
+  },
 };
 
 export default api;
