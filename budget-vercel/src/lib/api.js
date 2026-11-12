@@ -2,6 +2,28 @@
 
 const API_BASE = '/api';
 
+// Resolves with the JSON body, or rejects with the API's `error` message (also for non-JSON failures).
+async function request(url, options) {
+  const res = await fetch(url, options);
+  let data = null;
+  try {
+    data = await res.json();
+  } catch {
+    /* empty or non-JSON body */
+  }
+  // A 200 may still carry `error` (the receipts route reports Drive problems that way): callers read it.
+  if (!res.ok || !data) {
+    throw new Error((data && data.error) || `Request failed (${res.status})`);
+  }
+  return data;
+}
+
+const jsonBody = (method, body) => ({
+  method,
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify(body),
+});
+
 export const api = {
   // Accounts
   getAccounts: () => fetch(`${API_BASE}/accounts`).then(r => r.json()),
@@ -71,6 +93,20 @@ export const api = {
     if (year) searchParams.set('year', year);
     return fetch(`${API_BASE}/analytics/rental-property?${searchParams}`).then(r => r.json());
   },
+
+  // Settings
+  getSettings: () => request(`${API_BASE}/settings`),
+  saveSetting: (key, value) => request(`${API_BASE}/settings`, jsonBody('POST', { key, value })),
+
+  // Tax (T776) and receipts. These reject with the API's error message.
+  getT776: (year) => request(`${API_BASE}/rental/t776?year=${encodeURIComponent(year)}`),
+  t776CsvUrl: (year) => `${API_BASE}/rental/t776?year=${encodeURIComponent(year)}&format=csv`,
+  getReceipts: (year) => request(`${API_BASE}/receipts?year=${encodeURIComponent(year)}`),
+  linkReceipt: (link) => request(`${API_BASE}/receipts/link`, jsonBody('POST', link)),
+  unlinkReceipt: (driveFileId) => request(
+    `${API_BASE}/receipts/link?drive_file_id=${encodeURIComponent(driveFileId)}`,
+    { method: 'DELETE' },
+  ),
 
   // Cache
   refreshData: () => fetch(`${API_BASE}/cache/refresh`, { method: 'POST' }).then(r => r.json()),

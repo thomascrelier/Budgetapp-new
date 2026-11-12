@@ -56,3 +56,16 @@ test('CSV quotes commas, quotes and newlines', () => {
   expect(csv).toContain('"Paint, ""white"""');
   expect(csv).toContain('"a\nb"');
 });
+test('toT776Csv fills the receipt column from an optional transaction-to-receipt map', () => {
+  const r = buildT776({ year: 2026, rentalAccountId: R, mortgageInterest: null, txns: [
+    row({ id: 11, description: 'Plumber', amount: -900 }),
+    row({ id: 12, description: 'Hardware store', amount: -40 }),
+    row({ id: 13, account_id: 1, description: 'Appliance store', amount: -971.79, tax_tag: 'Capital CCA 8' }),
+  ]});
+  const lines = toT776Csv(r, new Map([[11, 'https://drive.example/f1'], [13, 'stove.pdf']])).split('\n');
+  expect(lines.find(l => l.includes('Plumber')).endsWith(',https://drive.example/f1')).toBe(true);
+  expect(lines.find(l => l.includes('Hardware store')).endsWith(',')).toBe(true);
+  expect(lines.find(l => l.includes('Appliance store')).endsWith(',stove.pdf')).toBe(true);
+  // One argument still works and leaves the column empty.
+  expect(toT776Csv(r).split('\n').find(l => l.includes('Plumber')).endsWith(',')).toBe(true);
+});

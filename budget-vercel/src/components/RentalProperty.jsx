@@ -20,6 +20,7 @@ import {
 import api from '@/lib/api';
 import { currentMonth } from '@/lib/dates';
 import TenantLedger from './rental/TenantLedger';
+import TaxView from './rental/TaxView';
 import { useChartTheme } from './ThemeProvider';
 import PageTransition from './PageTransition';
 
@@ -430,11 +431,7 @@ export default function RentalProperty() {
         <div role="tabpanel" id={`rental-panel-${tab}`} aria-labelledby={`rental-tab-${tab}`} tabIndex={0} className="focus:outline-none focus-visible:ring-1 focus-visible:ring-accent/50 rounded-lg">
           {tab === 'overview' && <RentalOverview year={year} />}
           {tab === 'tenants' && <TenantLedger />}
-          {tab === 'tax' && (
-            <div className="glass-card rounded-xl p-8 md:p-12 text-center text-text-tertiary">
-              Tax view is coming in the next step.
-            </div>
-          )}
+          {tab === 'tax' && <TaxView year={year} />}
         </div>
       </div>
     </PageTransition>

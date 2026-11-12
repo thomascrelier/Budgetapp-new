@@ -125,10 +125,11 @@ function csvField(v) {
   return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
-export function toT776Csv(result) {
+// receipts: optional Map(transaction id -> Drive link or file name) for the receipt column.
+export function toT776Csv(result, receipts = null) {
   const out = [['section', 'line', 'label', 'date', 'description', 'amount', 'tax_tag', 'notes', 'receipt']];
   const item = (section, line, label, t, amount) =>
-    out.push([section, line, label, t.date, t.description, amount, t.tax_tag || '', t.notes || '', '']);
+    out.push([section, line, label, t.date, t.description, amount, t.tax_tag || '', t.notes || '', receipts?.get(t.id) || '']);
   for (const l of result.lines) {
     const income = INCOME_LINES.has(l.code);
     for (const t of l.items) item('line', l.code, l.label, t, round2(income ? t.amount : -t.amount));
