@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { summarize, inMonth, round2 } from '@/lib/analytics';
+import { summarize, inMonth, round2, budgetStatus, balanceSeries } from '@/lib/analytics';
 import { personalAccountIds, rentalAccount, resolveAccountIds } from '@/lib/scope';
 
 test('summarize nets refunds and ignores transfers', () => {
@@ -33,4 +33,19 @@ test('rentalAccount by setting, case-insensitive', () => {
 test('resolveAccountIds', () => {
   expect(resolveAccountIds(new URLSearchParams('account_ids=1,2'), accounts, {})).toEqual([1, 2]);
   expect(resolveAccountIds(new URLSearchParams(''), accounts, {})).toEqual([1]);
+});
+
+test('budgetStatus uses net spending and marks over', () => {
+  const txns = [
+    { date: '2026-11-03', amount: -120, category: 'Dining', description: 'A' },
+    { date: '2026-11-04', amount: 20, category: 'Dining', description: 'refund' },
+    { date: '2026-10-30', amount: -500, category: 'Dining', description: 'old' },
+  ];
+  const [d] = budgetStatus([{ category_name: 'Dining', monthly_limit: 90, alert_threshold: 80 }], txns, '2026-11');
+  expect(d).toMatchObject({ spent: 100, remaining: 0, status: 'over' });
+});
+test('balanceSeries ends today (Toronto) and sums signed amounts', () => {
+  const s = balanceSeries([{ id: 1, initial_balance: 100 }], [{ account_id: 1, date: '2026-10-30', amount: -40 }], 3, new Date('2026-11-01T03:30:00Z'));
+  expect(s.map(p => p.date)).toEqual(['2026-10-29', '2026-10-30', '2026-10-31']);
+  expect(s.at(-1).balance).toBe(60);
 });

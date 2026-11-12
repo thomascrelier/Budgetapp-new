@@ -1,59 +1,33 @@
 import { NextResponse } from 'next/server';
-import { getAllTransactions } from '@/lib/sheets';
+import { getAccounts, getAllTransactions, getSettings } from '@/lib/sheets';
+import { resolveAccountIds } from '@/lib/scope';
+import { summarize, inMonth } from '@/lib/analytics';
+import { lastNMonths } from '@/lib/dates';
 
 const TRACKED_CATEGORIES = ['Coffee Shops', 'Car Fuel', 'Groceries', 'Dining'];
-
-function getMonthStr(year, month) {
-  return `${year}-${String(month).padStart(2, '0')}`;
-}
-
-function getMonthRange(now, count) {
-  const months = [];
-  for (let i = count - 1; i >= 0; i--) {
-    let year = now.getFullYear();
-    let month = now.getMonth() + 1 - i;
-    while (month <= 0) {
-      month += 12;
-      year -= 1;
-    }
-    months.push(getMonthStr(year, month));
-  }
-  return months;
-}
 
 export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url);
-    const accountIdsParam = searchParams.get('account_ids');
-    const accountIds = accountIdsParam
-      ? accountIdsParam.split(',').map(Number)
-      : null;
 
-    let transactions = await getAllTransactions();
+    const [accounts, allTransactions, settings] = await Promise.all([
+      getAccounts(),
+      getAllTransactions(),
+      getSettings(),
+    ]);
+    const accountIds = resolveAccountIds(searchParams, accounts, settings);
+    const transactions = allTransactions.filter(t => accountIds.includes(t.account_id));
 
-    if (accountIds) {
-      transactions = transactions.filter(t => accountIds.includes(t.account_id));
-    }
-
-    const now = new Date();
-    const months = getMonthRange(now, 3); // current + 2 prior
-    const monthSet = new Set(months);
-
-    // Filter to tracked categories, relevant months, expenses only
-    const relevant = transactions.filter(
-      t =>
-        monthSet.has(t.date.substring(0, 7)) &&
-        TRACKED_CATEGORIES.includes(t.category) &&
-        t.amount < 0
+    const months = lastNMonths(3); // current + 2 prior
+    const byMonth = Object.fromEntries(
+      months.map(m => [m, summarize(inMonth(transactions, m)).byCategory])
     );
 
     const categories = TRACKED_CATEGORIES.map(category => {
-      const monthlyData = months.map(month => {
-        const total = relevant
-          .filter(t => t.category === category && t.date.substring(0, 7) === month)
-          .reduce((sum, t) => sum + Math.abs(t.amount), 0);
-        return { month, amount: Math.round(total) };
-      });
+      const monthlyData = months.map(month => ({
+        month,
+        amount: Math.round(Math.max(0, byMonth[month][category] || 0)),
+      }));
 
       const current = monthlyData[2].amount;
       const previous = monthlyData[1].amount;

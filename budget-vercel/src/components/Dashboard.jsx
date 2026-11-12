@@ -106,7 +106,6 @@ export default function Dashboard() {
   const [balanceHistory, setBalanceHistory] = useState([]);
   const [accounts, setAccounts] = useState([]);
   const [selectedMonth, setSelectedMonth] = useState(null);
-  const [personalAccountIds, setPersonalAccountIds] = useState(null);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -116,18 +115,12 @@ export default function Dashboard() {
       const allAccounts = accountsRes.accounts || [];
       setAccounts(allAccounts);
 
-      const personalIds = allAccounts
-        .filter(a => a.name !== 'CIBC Rental')
-        .map(a => a.id)
-        .join(',');
-      setPersonalAccountIds(personalIds || null);
-
-      let accountIds = personalIds || null;
-
+      // No account_ids: the server defaults every analytics route to the personal accounts,
+      // so the cards, the cash-flow bars and the month drill-down always agree.
       const [dashboardRes, cashFlowRes, balanceRes] = await Promise.all([
-        api.getDashboard(accountIds),
-        api.getCashFlow(6, accountIds),
-        api.getBalanceHistory(30, accountIds),
+        api.getDashboard(),
+        api.getCashFlow(6),
+        api.getBalanceHistory(30),
       ]);
 
       setDashboard(dashboardRes);
@@ -169,13 +162,25 @@ export default function Dashboard() {
     return (
       <MonthDetail
         month={selectedMonth}
-        selectedAccount={null}
         onBack={() => setSelectedMonth(null)}
       />
     );
   }
 
   const kpis = dashboard?.kpis || {};
+  const issues = dashboard?.data_issues;
+  const unreadable = issues?.unreadable_rows || [];
+  const noId = issues?.rows_without_id || 0;
+  const unreadableRows = unreadable.map(r => r.row_number).filter(n => n != null);
+  const unreadableNotice = unreadable.length
+    ? `${unreadable.length} ${unreadable.length === 1 ? 'row' : 'rows'} in your Google Sheet couldn\u2019t be read` +
+      (unreadableRows.length
+        ? ` (${unreadableRows.length === 1 ? 'row' : 'rows'} ${unreadableRows.slice(0, 10).join(', ')}${unreadableRows.length > 10 ? ', and more' : ''})`
+        : '') + '.'
+    : null;
+  const noIdNotice = noId
+    ? `${noId} ${noId === 1 ? 'row has' : 'rows have'} no id and can\u2019t be edited.`
+    : null;
 
   const handleBarClick = (data) => {
     if (data?.month) {
@@ -210,6 +215,13 @@ export default function Dashboard() {
         <p className="mt-1 text-text-tertiary">Overview of your financial health</p>
       </div>
 
+      {(unreadableNotice || noIdNotice) && (
+        <div role="status" className="space-y-0.5 rounded-lg border border-border px-4 py-3 text-sm text-text-tertiary">
+          {unreadableNotice && <p>{unreadableNotice}</p>}
+          {noIdNotice && <p>{noIdNotice}</p>}
+        </div>
+      )}
+
       {/* This month: one surface, three figures */}
       <section aria-label="This month" className="glass-card grid grid-cols-1 divide-y divide-border rounded-xl sm:grid-cols-3 sm:divide-x sm:divide-y-0">
         <KpiCard title="Total Balance" value={kpis.total_balance} />
@@ -230,9 +242,10 @@ export default function Dashboard() {
             let annotation;
             let shown = balance;
             if (balance !== null && isCredit) {
+              // Card balances are signed like the sheet: purchases push them below zero.
               shown = Math.abs(balance);
-              if (balance > 0) { tone = 'negative'; annotation = 'owed'; }
-              else if (balance < 0) { tone = 'positive'; annotation = 'credit'; }
+              if (balance < 0) { tone = 'negative'; annotation = 'owed'; }
+              else if (balance > 0) { tone = 'positive'; annotation = 'credit'; }
             } else if (balance !== null && balance < 0) {
               tone = 'negative';
               annotation = 'overdrawn';

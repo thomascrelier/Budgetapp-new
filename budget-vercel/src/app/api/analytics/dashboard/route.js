@@ -1,87 +1,57 @@
 import { NextResponse } from 'next/server';
-import { getAccountsWithBalances, getAllTransactions, getBudgets } from '@/lib/sheets';
-
-// Categories that represent money movement, not actual spending
-const NON_SPENDING_CATEGORIES = ['Transfer', 'Transfers & Payments', 'Investments'];
+import {
+  getAccountsWithBalances,
+  getAllTransactions,
+  getBudgets,
+  getParseIssues,
+  getSettings,
+} from '@/lib/sheets';
+import { resolveAccountIds } from '@/lib/scope';
+import { summarize, inMonth, budgetStatus } from '@/lib/analytics';
+import { currentMonth } from '@/lib/dates';
 
 export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url);
-    const accountIdsParam = searchParams.get('account_ids');
-    const accountIds = accountIdsParam ? accountIdsParam.split(',').map(Number) : null;
+    const [accounts, allTransactions, budgets, settings, parseIssues] = await Promise.all([
+      getAccountsWithBalances(),
+      getAllTransactions(),
+      getBudgets(),
+      getSettings(),
+      getParseIssues(),
+    ]);
 
-    // Get accounts and transactions
-    const accounts = await getAccountsWithBalances();
-    const allTransactions = await getAllTransactions();
-    const budgets = await getBudgets();
+    const accountIds = resolveAccountIds(searchParams, accounts, settings);
+    const transactions = allTransactions.filter(t => accountIds.includes(t.account_id));
+    const scopedAccounts = accounts.filter(a => accountIds.includes(a.id));
 
-    // Filter by account if specified
-    const filteredAccounts = accountIds
-      ? accounts.filter(a => accountIds.includes(a.id))
-      : accounts;
+    const totalBalance = scopedAccounts.reduce((sum, a) => sum + a.current_balance, 0);
 
-    let transactions = allTransactions;
-    if (accountIds) {
-      transactions = transactions.filter(t => accountIds.includes(t.account_id));
-    }
+    const month = currentMonth();
+    const { income, spending, net } = summarize(inMonth(transactions, month));
 
-    // Calculate total balance
-    const totalBalance = filteredAccounts.reduce((sum, a) => sum + a.current_balance, 0);
-
-    // Calculate monthly spending and income
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = now.getMonth() + 1;
-    const monthStr = `${year}-${String(month).padStart(2, '0')}`;
-
-    const monthTransactions = transactions.filter(t => t.date.startsWith(monthStr));
-
-    let monthlyIncome = 0;
-    let monthlySpending = 0;
-    for (const t of monthTransactions) {
-      const isNonSpending = NON_SPENDING_CATEGORIES.includes(t.category);
-      if (t.amount > 0 && !isNonSpending) monthlyIncome += t.amount;
-      else if (t.amount < 0 && !isNonSpending) monthlySpending += Math.abs(t.amount);
-    }
-
-    // Calculate spending by category for budget alerts
-    const spendingByCategory = {};
-    for (const t of monthTransactions) {
-      if (t.amount < 0 && !NON_SPENDING_CATEGORIES.includes(t.category)) {
-        const cat = t.category || 'Uncategorized';
-        spendingByCategory[cat] = (spendingByCategory[cat] || 0) + Math.abs(t.amount);
-      }
-    }
-
-    // Check for budget alerts
-    const budgetAlerts = budgets
-      .map(budget => {
-        const spent = spendingByCategory[budget.category_name] || 0;
-        const percentageUsed = budget.monthly_limit > 0
-          ? (spent / budget.monthly_limit) * 100
-          : 0;
-
-        if (percentageUsed >= budget.alert_threshold) {
-          return {
-            category_name: budget.category_name,
-            spent,
-            monthly_limit: budget.monthly_limit,
-            percentage_used: percentageUsed,
-          };
-        }
-        return null;
-      })
-      .filter(Boolean)
+    const budgetAlerts = budgetStatus(budgets, transactions, month)
+      .filter(b => b.status !== 'on_track')
+      .map(b => ({
+        category_name: b.category_name,
+        spent: b.spent,
+        monthly_limit: b.monthly_limit,
+        percentage_used: b.percentage_used,
+      }))
       .sort((a, b) => b.percentage_used - a.percentage_used);
 
     return NextResponse.json({
       kpis: {
         total_balance: totalBalance,
-        monthly_spending: monthlySpending,
-        monthly_income: monthlyIncome,
-        net_cash_flow: monthlyIncome - monthlySpending,
+        monthly_spending: spending,
+        monthly_income: income,
+        net_cash_flow: net,
       },
       budget_alerts: budgetAlerts,
+      data_issues: {
+        unreadable_rows: parseIssues.map(t => ({ row_number: t.row_number, reason: t.parse_error })),
+        rows_without_id: allTransactions.filter(t => t.id === null).length,
+      },
     });
   } catch (error) {
     console.error('Error fetching dashboard:', error);

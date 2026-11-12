@@ -297,7 +297,12 @@ async function getCachedTransactionRows() {
 }
 
 export async function getTransactions(filters = {}) {
-  let transactions = (await getCachedTransactionRows()).filter(t => t.parse_error === null);
+  const all = (await getCachedTransactionRows()).filter(t => t.parse_error === null);
+
+  // Categories come from every transaction, so the dropdown never shrinks with the filters or the page
+  const categories = [...new Set(all.map(t => t.category).filter(Boolean))].sort();
+
+  let transactions = all;
 
   // Apply filters
   if (filters.account_id) {
@@ -305,6 +310,11 @@ export async function getTransactions(filters = {}) {
   }
   if (filters.category) {
     transactions = transactions.filter(t => t.category === filters.category);
+  }
+  if (filters.type === 'income') {
+    transactions = transactions.filter(t => t.amount > 0);
+  } else if (filters.type === 'expense') {
+    transactions = transactions.filter(t => t.amount < 0);
   }
   if (filters.start_date) {
     transactions = transactions.filter(t => t.date >= filters.start_date);
@@ -318,7 +328,7 @@ export async function getTransactions(filters = {}) {
   }
 
   // Sort by date descending
-  transactions.sort((a, b) => b.date.localeCompare(a.date));
+  transactions = [...transactions].sort((a, b) => b.date.localeCompare(a.date));
 
   // Enrich with account names
   const accounts = await getAccounts(true);
@@ -327,9 +337,6 @@ export async function getTransactions(filters = {}) {
     ...t,
     account_name: accountMap[t.account_id] || 'Unknown',
   }));
-
-  // Collect unique categories from all transactions (before pagination)
-  const categories = [...new Set(transactions.map(t => t.category).filter(Boolean))].sort();
 
   // Pagination
   const skip = filters.skip || 0;
@@ -341,6 +348,9 @@ export async function getTransactions(filters = {}) {
     categories,
   };
 }
+
+// Placeholder until the Settings tab lands; callers pass the result to the scope helpers.
+export async function getSettings() { return {}; }
 
 export async function getAllTransactions() {
   return (await getCachedTransactionRows()).filter(t => t.parse_error === null);

@@ -1,73 +1,31 @@
 import { NextResponse } from 'next/server';
-import { getAllTransactions, getAccounts } from '@/lib/sheets';
+import { getAccounts, getAllTransactions, getSettings } from '@/lib/sheets';
+import { resolveAccountIds } from '@/lib/scope';
+import { balanceSeries } from '@/lib/analytics';
 
 export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url);
     const days = parseInt(searchParams.get('days')) || 30;
-    const accountId = searchParams.get('account_id');
-    const accountIdsParam = searchParams.get('account_ids');
 
-    const [transactions, accounts] = await Promise.all([
-      getAllTransactions(),
+    // Legacy single-account param maps onto account_ids
+    const scoped = new URLSearchParams(searchParams);
+    if (!scoped.get('account_ids') && scoped.get('account_id')) {
+      scoped.set('account_ids', scoped.get('account_id'));
+    }
+
+    const [accounts, transactions, settings] = await Promise.all([
       getAccounts(),
+      getAllTransactions(),
+      getSettings(),
     ]);
+    const accountIds = resolveAccountIds(scoped, accounts, settings);
 
-    // Filter by account(s) if specified
-    let filteredTransactions = transactions;
-    let filteredAccounts = accounts;
-
-    if (accountId) {
-      const id = parseInt(accountId);
-      filteredTransactions = transactions.filter(t => t.account_id === id);
-      filteredAccounts = accounts.filter(a => a.id === id);
-    } else if (accountIdsParam) {
-      const ids = accountIdsParam.split(',').map(Number);
-      filteredTransactions = transactions.filter(t => ids.includes(t.account_id));
-      filteredAccounts = accounts.filter(a => ids.includes(a.id));
-    }
-
-    // Calculate initial balance from filtered accounts
-    const initialBalance = filteredAccounts.reduce((sum, a) => sum + a.initial_balance, 0);
-
-    // Get date range
-    const endDate = new Date();
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - days);
-
-    // Sort transactions by date ascending
-    const sortedTransactions = filteredTransactions
-      .filter(t => t.date)
-      .sort((a, b) => a.date.localeCompare(b.date));
-
-    // Calculate running balance up to start date
-    let runningBalance = initialBalance;
-    for (const t of sortedTransactions) {
-      if (t.date < startDate.toISOString().split('T')[0]) {
-        runningBalance += t.amount;
-      }
-    }
-
-    // Build daily balance data
-    const data = [];
-    const currentDate = new Date(startDate);
-
-    while (currentDate <= endDate) {
-      const dateStr = currentDate.toISOString().split('T')[0];
-
-      // Add all transactions for this date
-      const dayTransactions = sortedTransactions.filter(t => t.date === dateStr);
-      for (const t of dayTransactions) {
-        runningBalance += t.amount;
-      }
-
-      data.push({
-        date: dateStr,
-        balance: runningBalance,
-      });
-
-      currentDate.setDate(currentDate.getDate() + 1);
-    }
+    const data = balanceSeries(
+      accounts.filter(a => accountIds.includes(a.id)),
+      transactions.filter(t => accountIds.includes(t.account_id)),
+      days,
+    );
 
     return NextResponse.json({ data });
   } catch (error) {

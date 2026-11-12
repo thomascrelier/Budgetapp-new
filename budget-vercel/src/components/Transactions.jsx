@@ -176,19 +176,12 @@ export default function Transactions() {
       if (filterSearch) params.search = filterSearch;
       if (filterStartDate) params.start_date = filterStartDate;
       if (filterEndDate) params.end_date = filterEndDate;
+      if (filterAmountType) params.type = filterAmountType;
 
       const data = await api.getTransactions(params);
       if (thisRequest !== requestId.current) return;
       if (data.error) throw new Error(data.error);
-      let txns = data.transactions || [];
-
-      if (filterAmountType === 'income') {
-        txns = txns.filter(t => t.amount > 0);
-      } else if (filterAmountType === 'expense') {
-        txns = txns.filter(t => t.amount < 0);
-      }
-
-      setTransactions(txns);
+      setTransactions(data.transactions || []);
       setTotal(data.total || 0);
       if (data.categories) {
         setAvailableCategories(data.categories);

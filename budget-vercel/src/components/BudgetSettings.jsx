@@ -12,7 +12,7 @@ const formatCurrency = (value) =>
 // One source of truth for a budget's state. The server derives `status` from the budget's own alert
 // threshold; the old client also recolored at a fixed 75%, so a card could read "On track" in amber.
 const TONES = {
-  exceeded: { label: 'Over budget', text: 'text-negative', pill: 'bg-negative/10 text-negative', bar: 'bg-negative' },
+  over: { label: 'Over budget', text: 'text-negative', pill: 'bg-negative/10 text-negative', bar: 'bg-negative' },
   warning: { label: 'Approaching limit', text: 'text-warning', pill: 'bg-warning/10 text-warning', bar: 'bg-warning' },
   on_track: { label: 'On track', text: 'text-positive', pill: 'bg-positive/10 text-positive', bar: 'bg-accent' },
 };

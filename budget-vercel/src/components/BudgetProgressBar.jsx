@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 import { formatMoney } from './AnimatedNumber';
 
 function getState(status, pct) {
-  if (status === 'exceeded' || pct >= 100) return 'over';
+  if (status === 'over' || status === 'exceeded' || pct >= 100) return 'over';
   if (status === 'warning' || pct >= 75) return 'near';
   return 'ok';
 }
