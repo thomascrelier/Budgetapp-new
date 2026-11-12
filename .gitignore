@@ -46,3 +46,6 @@ coverage/
 .coverage
 htmlcov/
 .worktrees/
+
+# Brainstorm mockups
+.superpowers/
