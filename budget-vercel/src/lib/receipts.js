@@ -4,6 +4,9 @@ export const MIN_RECEIPT_AMOUNT = 50;
 // Most files the receipts listing returns; past this the route reports `truncated`.
 export const MAX_RECEIPT_FILES = 5000;
 const INCOME_LINES = new Set(['8141', '8230']);
+// Interest and bank charges, property taxes, utilities: recurring bills the bank and utility statements
+// document, so the Tax view doesn't ask for a receipt for each one.
+const STATEMENT_LINES = new Set(['8710', '9180', '9220']);
 const DRIVE_ID = /^[A-Za-z0-9_-]+$/;
 
 // First "123.45", "123,45" or "123_45" in a file name. Digits on either side don't extend the match
@@ -31,13 +34,13 @@ const linkedIds = (links) => new Set(
   (links || []).filter((l) => l && l.transaction_id !== null && l.transaction_id !== undefined).map((l) => l.transaction_id),
 );
 
-// Capital items, and expense-line items of $50 or more, with no receipt linked.
+// Capital items, and items of $50 or more on the other expense lines, with no receipt linked.
 export function missingReceipts(t776Result, links) {
   const linked = linkedIds(links);
   const out = [];
   for (const c of t776Result?.capital || []) if (!linked.has(c.txn.id)) out.push(c.txn);
   for (const line of t776Result?.lines || []) {
-    if (INCOME_LINES.has(line.code)) continue;
+    if (INCOME_LINES.has(line.code) || STATEMENT_LINES.has(line.code)) continue;
     for (const t of line.items || []) {
       if (Math.abs(t.amount) >= MIN_RECEIPT_AMOUNT && !linked.has(t.id)) out.push(t);
     }

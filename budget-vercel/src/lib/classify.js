@@ -12,6 +12,7 @@ export function isCardPayment(description) {
 export function classify(t) {
   if (TRANSFER_CATEGORIES.includes(t.category) || isCardPayment(t.description)) return 'transfer';
   if (INVESTMENT_CATEGORIES.includes(t.category)) return 'investment';
-  if (INCOME_CATEGORIES.includes(t.category) && t.amount > 0) return 'income';
+  // Signed: a negative row in an income category (a returned payment, a reversal) reduces income.
+  if (INCOME_CATEGORIES.includes(t.category)) return 'income';
   return t.amount < 0 ? 'expense' : 'refund';
 }

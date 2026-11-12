@@ -49,3 +49,12 @@ test('balanceSeries ends today (Toronto) and sums signed amounts', () => {
   expect(s.map(p => p.date)).toEqual(['2026-10-29', '2026-10-30', '2026-10-31']);
   expect(s.at(-1).balance).toBe(60);
 });
+test('a negative income row reduces income instead of counting as spending', () => {
+  const s = summarize([
+    { amount: 2450, category: 'Rental Income', description: 'E-TRANSFER Tenant A' },
+    { amount: -2450, category: 'Rental Income', description: 'E-TRANSFER RETURNED' },
+    { amount: 2450, category: 'Rental Income', description: 'E-TRANSFER Tenant A' },
+    { amount: -60, category: 'Dining', description: 'CAFE' },
+  ]);
+  expect(s).toEqual({ income: 2450, spending: 60, net: 2390, byCategory: { Dining: 60 } });
+});

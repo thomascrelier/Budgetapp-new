@@ -63,6 +63,21 @@ test('missingReceipts ignores rent deposits and unlinked link rows', () => {
   expect(missingReceipts(t776, [{ drive_file_id: 'f', transaction_id: null }]).map(t => t.id)).toEqual([11]);
 });
 
+test('missingReceipts leaves out recurring bills: interest, property tax and utilities', () => {
+  const t776 = {
+    capital: [{ txn: { id: 1, amount: -971.79 } }],
+    lines: [
+      { code: '8710', items: [{ id: 20, amount: -310.5 }] },
+      { code: '8960', items: [{ id: 21, amount: -400 }] },
+      { code: '9180', items: [{ id: 22, amount: -2100 }] },
+      { code: '9220', items: [{ id: 23, amount: -180.29 }, { id: 24, amount: -95 }] },
+      { code: '9270', items: [{ id: 25, amount: -60 }] },
+    ],
+  };
+  // Statements cover 8710, 9180 and 9220; capital items and the other expense lines still need receipts.
+  expect(missingReceipts(t776, []).map(t => t.id)).toEqual([1, 21, 25]);
+});
+
 test('extractFolderId accepts a folder link or a bare id', () => {
   expect(extractFolderId('https://drive.google.com/drive/folders/1AbC_def-GHIjklMNOpq?usp=sharing')).toBe('1AbC_def-GHIjklMNOpq');
   expect(extractFolderId('https://drive.google.com/drive/u/0/folders/1AbC_def-GHIjklMNOpq')).toBe('1AbC_def-GHIjklMNOpq');
@@ -252,6 +267,23 @@ describe('GET /api/receipts', () => {
     expect(body.error).toBeNull();
     expect(body.truncated).toBe(false);
     expect(body.files).toEqual([expect.objectContaining({ id: 'f1', transaction_id: null, suggested_transaction_id: 1 })]);
+  });
+
+  test('without a saved folder, GOOGLE_RECEIPTS_FOLDER_ID is used', async () => {
+    sheets.getSettings.mockResolvedValue({ rental_account_name: 'Rental Chequing' });
+    drive.listReceiptFolder.mockResolvedValue({ files: [], truncated: false });
+    vi.stubEnv('GOOGLE_RECEIPTS_FOLDER_ID', 'envFolder123');
+    try {
+      const body = await (await call()).json();
+      expect(body.folder_configured).toBe(true);
+      expect(body.folder_id).toBe('envFolder123');
+      expect(drive.listReceiptFolder).toHaveBeenCalledWith('envFolder123');
+      // A folder saved on the Tax tab wins over the environment.
+      sheets.getSettings.mockResolvedValue({ rental_account_name: 'Rental Chequing', receipts_folder_id: 'folder123' });
+      expect((await (await call()).json()).folder_id).toBe('folder123');
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   test('a folder past the file cap is flagged as truncated', async () => {

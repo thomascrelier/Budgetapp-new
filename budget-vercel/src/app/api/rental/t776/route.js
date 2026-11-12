@@ -20,7 +20,7 @@ export async function GET(request) {
       const links = await getReceiptLinks();
       // Drive links when the folder can be read; file names otherwise. The export never fails on Drive.
       let files = [];
-      const folderId = String(settings.receipts_folder_id || '').trim();
+      const folderId = String(settings.receipts_folder_id || process.env.GOOGLE_RECEIPTS_FOLDER_ID || '').trim();
       if (folderId && links.length) {
         try {
           files = await listReceiptFiles(folderId);

@@ -8,11 +8,12 @@ import { round2 } from '@/lib/analytics';
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const EMPTY_SUMMARY = { total_income: 0, total_expenses: 0, net_income: 0 };
 
-// Income = 'income'; expenses = 'expense' minus 'refund'; transfers and investments ignored.
+// Income = 'income' (signed, so a returned rent payment reduces it); expenses = 'expense' minus 'refund';
+// transfers and investments ignored.
 function flows(t) {
   const kind = classify(t);
-  if (kind === 'income') return { income: t.amount, expense: 0 };
-  if (kind === 'expense' || kind === 'refund') return { income: 0, expense: -t.amount };
+  if (kind === 'income') return { income: t.amount, expense: 0, isIncome: true };
+  if (kind === 'expense' || kind === 'refund') return { income: 0, expense: -t.amount, isIncome: false };
   return null;
 }
 
@@ -45,7 +46,7 @@ function categoryTotals(txns) {
     const e = (out[c] ||= { total: 0, count: 0, is_income: false });
     e.total += f.income - f.expense;
     e.count += 1;
-    if (f.income) e.is_income = true;
+    if (f.isIncome) e.is_income = true;
   }
   return out;
 }

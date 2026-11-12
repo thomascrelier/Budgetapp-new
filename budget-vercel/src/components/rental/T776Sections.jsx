@@ -105,7 +105,8 @@ function MortgageRow({ year, mortgage, onSaved }) {
         <p className="font-medium text-text-primary">Mortgage (line 8710)</p>
         <p className="text-xs text-text-tertiary tabular">Payments in {year}: {money(mortgage.payments_total)}</p>
       </div>
-      {mortgage.needs_interest && (
+      {/* Only when there were mortgage payments to leave out. */}
+      {mortgage.needs_interest && mortgage.payments_total > 0 && (
         <p className="flex gap-2 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-text-primary">
           <span aria-hidden="true" className="text-warning font-semibold">!</span>
           <span>Line 8710 leaves out your mortgage until you enter the interest for {year}. Only the interest is deductible, not the whole payment.</span>

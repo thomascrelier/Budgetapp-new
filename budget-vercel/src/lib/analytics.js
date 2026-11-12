@@ -17,7 +17,7 @@ export function summarize(txns) {
   const cats = {};
   for (const t of txns) {
     const kind = classify(t);
-    if (kind === 'income') income += t.amount;
+    if (kind === 'income') income += t.amount; // signed: a reversal reduces income
     else if (kind === 'expense' || kind === 'refund') {
       spending -= t.amount;
       const c = t.category || 'Uncategorized';

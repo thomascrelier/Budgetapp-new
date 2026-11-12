@@ -101,6 +101,14 @@ export const api = {
   // Tax (T776) and receipts. These reject with the API's error message.
   getT776: (year) => request(`${API_BASE}/rental/t776?year=${encodeURIComponent(year)}`),
   t776CsvUrl: (year) => `${API_BASE}/rental/t776?year=${encodeURIComponent(year)}&format=csv`,
+  // Resolves with the CSV as a Blob; rejects with the API's error when it answers with JSON instead.
+  getT776Csv: async (year) => {
+    const res = await fetch(api.t776CsvUrl(year));
+    if (res.ok && (res.headers.get('content-type') || '').includes('text/csv')) return res.blob();
+    let data = null;
+    try { data = await res.json(); } catch { /* not JSON */ }
+    throw new Error((data && data.error) || `Request failed (${res.status})`);
+  },
   getReceipts: (year) => request(`${API_BASE}/receipts?year=${encodeURIComponent(year)}`),
   linkReceipt: (link) => request(`${API_BASE}/receipts/link`, jsonBody('POST', link)),
   unlinkReceipt: (driveFileId) => request(

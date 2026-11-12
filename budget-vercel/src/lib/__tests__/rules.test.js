@@ -5,9 +5,9 @@ const rental = { kind: 'rental' };
 test('rental rules', () => {
   expect(categorize('Electronic Funds Transfer PREAUTHORIZED DEBIT Hydro One', -151.68, rental)).toBe('Electricity');
   expect(categorize('Electronic Funds Transfer MORTGAGE PAYMENT MTG0001.1 CMI', -328.08, rental)).toBe('Mortgage');
-  expect(categorize('Internet Banking E-TRANSFER 011770708355 Chexy', 2450, rental)).toBe('Rental Income');
-  expect(categorize('Internet Banking E-TRANSFER 011659090781 Canadian Bread Settlement', 49.11, rental)).toBe('Other');
-  expect(categorize('Internet Banking INTERNET TRANSFER 000000136558 TO CARD 4500********9145', -1956, rental)).toBe('Transfers & Payments');
+  expect(categorize('Internet Banking E-TRANSFER 000000000000 Chexy', 2450, rental)).toBe('Rental Income');
+  expect(categorize('Internet Banking E-TRANSFER 000000000000 Canadian Bread Settlement', 49.11, rental)).toBe('Other');
+  expect(categorize('Internet Banking INTERNET TRANSFER 000000000000 TO CARD 4500********0000', -1956, rental)).toBe('Transfers & Payments');
 });
 test('unknown chequing rows are Uncategorized, not Transfer', () => {
   expect(categorize('Electronic Funds Transfer PREAUTHORIZED DEBIT SOME NEW BILLER', -80, { kind: 'chequing' })).toBe('Uncategorized');

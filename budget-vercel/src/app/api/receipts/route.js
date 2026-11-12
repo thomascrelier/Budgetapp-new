@@ -19,7 +19,8 @@ export async function GET(request) {
       getAccounts(true), getSettings(), getAllTransactions(), getReceiptLinks(),
     ]);
     const email = serviceAccountEmail();
-    const folderId = String(settings.receipts_folder_id || '').trim();
+    // A folder saved on the Tax tab wins; GOOGLE_RECEIPTS_FOLDER_ID is the fallback.
+    const folderId = String(settings.receipts_folder_id || process.env.GOOGLE_RECEIPTS_FOLDER_ID || '').trim();
     const rental = rentalAccount(accounts, settings);
     // Same inputs as /api/rental/t776, so `missing` matches the T776 the view shows.
     const t776 = buildT776({

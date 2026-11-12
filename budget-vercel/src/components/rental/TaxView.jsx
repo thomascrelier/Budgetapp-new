@@ -59,6 +59,8 @@ function TilesSkeleton() {
 }
 
 const files = (n) => `${n} file${n === 1 ? '' : 's'}`;
+// Missing receipts shown before "Show all".
+const MISSING_PREVIEW = 5;
 
 // Tax tab, receipts first: the Drive folder's files matched to transactions, what's missing, then the T776
 // (lines, mortgage interest, items to sort out) and the capital items.
@@ -68,6 +70,10 @@ export default function TaxView({ year }) {
   const [dialog, setDialog] = useState(null); // { file, opener }
   const [changingFolder, setChangingFolder] = useState(false);
   const [announcement, setAnnouncement] = useState('');
+  const [showAllMissing, setShowAllMissing] = useState(false);
+  const [csv, setCsv] = useState({ busy: false, error: null });
+  // Another year starts collapsed, without the last year's export error.
+  useEffect(() => { setShowAllMissing(false); setCsv((c) => (c.error ? { ...c, error: null } : c)); }, [year]);
 
   const r = receipts.data;
   const t = t776.data;
@@ -110,6 +116,27 @@ export default function TaxView({ year }) {
     await loadReceipts();
   }, [closeDialog, loadReceipts]);
 
+  // Fetch first so an error (no rental account, the sheet unreachable) is shown instead of downloaded.
+  const exportCsv = async () => {
+    if (csv.busy) return;
+    setCsv({ busy: true, error: null });
+    try {
+      const blob = await api.getT776Csv(year);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `t776-${year}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setCsv({ busy: false, error: null });
+      setAnnouncement(`T776 for ${year} exported.`);
+    } catch (err) {
+      setCsv({ busy: false, error: err.message || 'Network error' });
+    }
+  };
+
   const configured = Boolean(r?.folder_configured);
   const showSetup = r && (!configured || r.error || changingFolder);
   const unmatched = (r?.files || []).filter((f) => f.transaction_id === null).length;
@@ -136,8 +163,13 @@ export default function TaxView({ year }) {
               Receipts folder in Drive<NewTabHint />
             </a>
           )}
-          <a href={api.t776CsvUrl(year)} download={`t776-${year}.csv`} className={secondaryBtn}>Export CSV</a>
+          <button type="button" onClick={exportCsv} disabled={csv.busy} aria-busy={csv.busy || undefined} className={secondaryBtn}>
+            {csv.busy ? 'Exporting…' : 'Export CSV'}
+          </button>
         </div>
+        {csv.error && (
+          <p role="alert" className="w-full text-sm text-negative">Couldn&rsquo;t export the CSV: {csv.error}.</p>
+        )}
       </div>
 
       {receipts.error && !r && (
@@ -214,13 +246,13 @@ export default function TaxView({ year }) {
             <h3 id="missing-title" className="text-lg font-semibold text-text-primary">
               Missing receipts {r.missing.length > 0 && <span className="text-text-tertiary font-normal">({r.missing.length})</span>}
             </h3>
-            <p className="mt-1 text-sm text-text-tertiary">Capital items and expenses of $50 or more with no receipt linked. Add the receipt to the Drive folder, then match it above.</p>
+            <p className="mt-1 text-sm text-text-tertiary">Capital items and other expenses of $50 or more with no receipt linked. Recurring bills (utilities, property tax, interest) are covered by your statements.</p>
           </div>
           {r.missing.length === 0 ? (
-            <p className="px-4 md:px-6 py-6 text-positive">Every capital item and expense of $50 or more in {year} has a receipt.</p>
+            <p className="px-4 md:px-6 py-6 text-positive">Every capital item and other expense of $50 or more in {year} has a receipt.</p>
           ) : (
-            <ul className="divide-y divide-border/50">
-              {r.missing.map((x) => (
+            <ul id="missing-list" className="divide-y divide-border/50">
+              {(showAllMissing ? r.missing : r.missing.slice(0, MISSING_PREVIEW)).map((x) => (
                 <li key={x.id} className="px-4 md:px-6 py-3 flex items-start justify-between gap-3">
                   <div className="min-w-0 space-y-1">
                     <p className="text-sm text-text-primary break-words">{x.description}</p>
@@ -233,6 +265,14 @@ export default function TaxView({ year }) {
                 </li>
               ))}
             </ul>
+          )}
+          {r.missing.length > MISSING_PREVIEW && (
+            <div className="px-4 md:px-6 py-3 border-t border-border/50">
+              <button type="button" aria-expanded={showAllMissing} aria-controls="missing-list"
+                onClick={() => setShowAllMissing((v) => !v)} className={secondaryBtn}>
+                {showAllMissing ? 'Show fewer' : `Show all ${r.missing.length}`}
+              </button>
+            </div>
           )}
         </section>
       )}
