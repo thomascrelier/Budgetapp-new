@@ -75,16 +75,18 @@ export const api = {
   // Cache
   refreshData: () => fetch(`${API_BASE}/cache/refresh`, { method: 'POST' }).then(r => r.json()),
 
-  // Upload
-  uploadCSV: async (file, accountId) => {
+  // Import
+  previewImport: async (file, accountId) => {
     const formData = new FormData();
     formData.append('file', file);
-    formData.append('account_id', accountId);
-    return fetch(`${API_BASE}/upload`, {
-      method: 'POST',
-      body: formData,
-    }).then(r => r.json());
+    if (accountId) formData.append('account_id', accountId);
+    return fetch(`${API_BASE}/import/preview`, { method: 'POST', body: formData }).then(r => r.json());
   },
+  commitImport: (accountId, rows) => fetch(`${API_BASE}/import/commit`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ account_id: accountId, rows }),
+  }).then(r => r.json()),
 };
 
 export default api;
