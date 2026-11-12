@@ -120,6 +120,13 @@ export function buildT776({ txns, year, rentalAccountId, mortgageInterest = null
   };
 }
 
+// Text a spreadsheet would run as a formula (=, +, -, @, tab, CR first) gets a leading quote.
+// Only for free-text fields: amounts are numbers and keep their minus sign.
+function csvText(v) {
+  const s = v === undefined || v === null ? '' : String(v);
+  return /^[=+\-@\t\r]/.test(s) ? `'${s}` : s;
+}
+
 function csvField(v) {
   const s = v === undefined || v === null ? '' : String(v);
   return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
@@ -129,7 +136,7 @@ function csvField(v) {
 export function toT776Csv(result, receipts = null) {
   const out = [['section', 'line', 'label', 'date', 'description', 'amount', 'tax_tag', 'notes', 'receipt']];
   const item = (section, line, label, t, amount) =>
-    out.push([section, line, label, t.date, t.description, amount, t.tax_tag || '', t.notes || '', receipts?.get(t.id) || '']);
+    out.push([section, line, label, t.date, csvText(t.description), amount, csvText(t.tax_tag), csvText(t.notes), csvText(receipts?.get(t.id))]);
   for (const l of result.lines) {
     const income = INCOME_LINES.has(l.code);
     for (const t of l.items) item('line', l.code, l.label, t, round2(income ? t.amount : -t.amount));

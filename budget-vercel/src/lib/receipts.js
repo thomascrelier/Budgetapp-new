@@ -1,6 +1,8 @@
 // Pure helpers for receipts kept in a Google Drive folder. No server imports: the Tax view uses some of these too.
 
 export const MIN_RECEIPT_AMOUNT = 50;
+// Most files the receipts listing returns; past this the route reports `truncated`.
+export const MAX_RECEIPT_FILES = 5000;
 const INCOME_LINES = new Set(['8141', '8230']);
 const DRIVE_ID = /^[A-Za-z0-9_-]+$/;
 

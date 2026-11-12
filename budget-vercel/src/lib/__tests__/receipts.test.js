@@ -18,7 +18,7 @@ vi.mock('@/lib/sheets', () => ({
   getAllTransactions: vi.fn(),
   getReceiptLinks: vi.fn(),
 }));
-vi.mock('@/lib/drive', () => ({ listReceiptFiles: vi.fn() }));
+vi.mock('@/lib/drive', () => ({ listReceiptFolder: vi.fn() }));
 vi.mock('@/lib/google', () => ({ serviceAccountEmail: vi.fn() }));
 
 const EMAIL = 'receipts-bot@example-project.iam.gserviceaccount.com';
@@ -211,12 +211,13 @@ describe('GET /api/receipts', () => {
       folder_configured: false, folder_id: null, service_account_email: EMAIL, error: null, files: [],
     }));
     expect(body.missing.map(t => t.id)).toEqual([1]);
-    expect(drive.listReceiptFiles).not.toHaveBeenCalled();
+    expect(body.truncated).toBe(false);
+    expect(drive.listReceiptFolder).not.toHaveBeenCalled();
   });
 
   test('folder not shared (Drive 404): 200 with the sharing instructions', async () => {
     sheets.getSettings.mockResolvedValue({ rental_account_name: 'Rental Chequing', receipts_folder_id: 'folder123' });
-    drive.listReceiptFiles.mockRejectedValue(Object.assign(new Error('File not found: folder123.'), { code: 404 }));
+    drive.listReceiptFolder.mockRejectedValue(Object.assign(new Error('File not found: folder123.'), { code: 404 }));
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
     const res = await call();
     spy.mockRestore();
@@ -231,7 +232,7 @@ describe('GET /api/receipts', () => {
 
   test('other Drive failures: 200 with a generic message', async () => {
     sheets.getSettings.mockResolvedValue({ rental_account_name: 'Rental Chequing', receipts_folder_id: 'folder123' });
-    drive.listReceiptFiles.mockRejectedValue(Object.assign(new Error('Backend Error'), { code: 503 }));
+    drive.listReceiptFolder.mockRejectedValue(Object.assign(new Error('Backend Error'), { code: 503 }));
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
     const res = await call();
     spy.mockRestore();
@@ -241,11 +242,22 @@ describe('GET /api/receipts', () => {
 
   test('files come back annotated with links and suggestions', async () => {
     sheets.getSettings.mockResolvedValue({ rental_account_name: 'Rental Chequing', receipts_folder_id: 'folder123' });
-    drive.listReceiptFiles.mockResolvedValue([
-      { id: 'f1', name: 'plumber 900.00.pdf', mimeType: 'application/pdf', createdTime: '2026-07-01T00:00:00.000Z', webViewLink: 'https://drive.example/f1', folder: '' },
-    ]);
+    drive.listReceiptFolder.mockResolvedValue({
+      files: [
+        { id: 'f1', name: 'plumber 900.00.pdf', mimeType: 'application/pdf', createdTime: '2026-07-01T00:00:00.000Z', webViewLink: 'https://drive.example/f1', folder: '' },
+      ],
+      truncated: false,
+    });
     const body = await (await call()).json();
     expect(body.error).toBeNull();
+    expect(body.truncated).toBe(false);
     expect(body.files).toEqual([expect.objectContaining({ id: 'f1', transaction_id: null, suggested_transaction_id: 1 })]);
+  });
+
+  test('a folder past the file cap is flagged as truncated', async () => {
+    sheets.getSettings.mockResolvedValue({ rental_account_name: 'Rental Chequing', receipts_folder_id: 'folder123' });
+    drive.listReceiptFolder.mockResolvedValue({ files: [], truncated: true });
+    const body = await (await call()).json();
+    expect(body.truncated).toBe(true);
   });
 });

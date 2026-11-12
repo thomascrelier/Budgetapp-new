@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getAccounts, getAllTransactions, getReceiptLinks, getSettings } from '@/lib/sheets';
-import { listReceiptFiles } from '@/lib/drive';
+import { listReceiptFolder } from '@/lib/drive';
 import { serviceAccountEmail } from '@/lib/google';
 import { rentalAccount } from '@/lib/scope';
 import { parseAmount } from '@/lib/sheetRows';
@@ -30,10 +30,11 @@ export async function GET(request) {
     });
 
     let driveFiles = [];
+    let truncated = false;
     let error = null;
     if (folderId) {
       try {
-        driveFiles = await listReceiptFiles(folderId);
+        ({ files: driveFiles, truncated } = await listReceiptFolder(folderId));
       } catch (err) {
         console.error('Drive: could not list the receipts folder:', err?.code ?? '', err?.message ?? err);
         error = driveErrorMessage(err, email);
@@ -46,6 +47,7 @@ export async function GET(request) {
       folder_id: folderId || null,
       service_account_email: email,
       error,
+      truncated,
       files: receiptFilesForYear({ files: driveFiles, links, txns, candidates: linkCandidates(t776), year }),
       missing: missingReceipts(t776, links),
     });

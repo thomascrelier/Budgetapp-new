@@ -69,3 +69,20 @@ test('toT776Csv fills the receipt column from an optional transaction-to-receipt
   // One argument still works and leaves the column empty.
   expect(toT776Csv(r).split('\n').find(l => l.includes('Plumber')).endsWith(',')).toBe(true);
 });
+test('CSV text fields that a spreadsheet would run as formulas are quoted; amounts stay numbers', () => {
+  const r = buildT776({ year: 2026, rentalAccountId: R, mortgageInterest: null, txns: [
+    row({ id: 21, description: '=HYPERLINK("http://x")', notes: '+1 call back', amount: -100 }),
+    row({ id: 22, description: 'Hardware refund', notes: '@supplier', amount: 50 }),
+    row({ id: 23, description: '-Store credit', tax_tag: 'T776 9270', amount: -30 }),
+  ]});
+  const csv = toT776Csv(r, new Map([[21, '-scan.pdf']]));
+  const lines = csv.split('\n');
+  const first = lines.find(l => l.includes('HYPERLINK'));
+  expect(first).toContain(`"'=HYPERLINK(""http://x"")"`);
+  expect(first).toContain(",'+1 call back,");
+  expect(first.endsWith(",'-scan.pdf")).toBe(true);
+  expect(lines.find(l => l.includes('Hardware refund'))).toContain(",-50,,'@supplier,");
+  expect(lines.find(l => l.includes('Store credit'))).toContain(",'-Store credit,30,T776 9270,");
+  // A negative total is still a number.
+  expect(lines).toContain('total,8960,Repairs and maintenance,,,50,,,');
+});

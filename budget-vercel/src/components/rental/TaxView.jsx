@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import api from '@/lib/api';
-import { linkCandidates } from '@/lib/receipts';
+import { MAX_RECEIPT_FILES, linkCandidates } from '@/lib/receipts';
 import ReceiptTile from './ReceiptTile';
 import ReceiptLinkDialog from './ReceiptLinkDialog';
 import ReceiptsFolderSetup from './ReceiptsFolderSetup';
@@ -181,6 +181,11 @@ export default function TaxView({ year }) {
               {!changingFolder && <button type="button" onClick={() => setChangingFolder(true)} className={secondaryBtn}>Change folder</button>}
             </div>
           </div>
+          {r.truncated && (
+            <p className="text-sm text-text-tertiary">
+              Showing the first {MAX_RECEIPT_FILES.toLocaleString('en-CA')} files in this folder.
+            </p>
+          )}
           {r.files.length === 0 ? (
             <div className="rounded-xl border border-dashed border-border p-6 text-center">
               <p className="text-text-primary">No receipts for {year} in the folder yet.</p>
