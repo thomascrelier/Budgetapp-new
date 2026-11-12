@@ -102,3 +102,99 @@ export function parseAccountRow(row) {
     created_at: text(row[5]) || new Date().toISOString(),
   };
 }
+
+// ============ TENANTS / RECEIPTS / SETTINGS ============
+
+export const TENANT_HEADERS = [
+  'id', 'name', 'unit', 'utility_share', 'utility_style', 'base_rent',
+  'separate_max', 'match_text', 'start_month', 'end_month', 'is_active',
+];
+
+export const RECEIPT_HEADERS = [
+  'drive_file_id', 'file_name', 'mime_type', 'transaction_id', 'linked_at',
+];
+
+function parseMonth(value) {
+  if (isBlank(value)) return null;
+  const m = String(value).trim().match(/^(\d{4})-(0[1-9]|1[0-2])$/);
+  return m ? `${m[1]}-${m[2]}` : null;
+}
+
+// "40%" -> 0.4, 0.4 -> 0.4, 40 -> 0.4 (values > 1 are percents); clamped 0-1.
+function parseShare(value) {
+  if (isBlank(value)) return 0;
+  let s = typeof value === 'number' ? value : null;
+  if (s === null) {
+    const str = String(value).trim();
+    const pct = str.endsWith('%');
+    const n = parseAmount(pct ? str.slice(0, -1) : str);
+    if (n === null) return 0;
+    s = pct ? n / 100 : n;
+    if (!pct && s > 1) s = s / 100;
+  } else if (s > 1) {
+    s = s / 100;
+  }
+  return Math.min(1, Math.max(0, s));
+}
+
+export function parseTenantRow(row) {
+  return {
+    id: parseIntCell(row[0]) ?? 0,
+    name: text(row[1]),
+    unit: text(row[2]),
+    utility_share: parseShare(row[3]),
+    utility_style: String(row[4] ?? '').trim() === 'separate' ? 'separate' : 'with_rent',
+    base_rent: parseAmount(row[5]),
+    separate_max: parseAmount(row[6]),
+    match_text: text(row[7]),
+    start_month: parseMonth(row[8]),
+    end_month: parseMonth(row[9]),
+    is_active: parseBool(row[10], true),
+  };
+}
+
+export function parseReceiptRow(row) {
+  return {
+    drive_file_id: text(row[0]),
+    file_name: text(row[1]),
+    mime_type: text(row[2]),
+    transaction_id: parseIntCell(row[3]),
+    linked_at: text(row[4]),
+  };
+}
+
+// Returns an error reason string, or null when the tenant is valid.
+export function validateTenant(t) {
+  if (!t || isBlank(t.name)) return 'name is required';
+  const share = t.utility_share;
+  if (typeof share !== 'number' || !Number.isFinite(share) || share < 0 || share > 1) {
+    return 'utility_share must be between 0 and 1';
+  }
+  if (t.utility_style !== 'with_rent' && t.utility_style !== 'separate') {
+    return 'utility_style must be with_rent or separate';
+  }
+  if (t.utility_style === 'with_rent' && parseAmount(t.base_rent) === null) {
+    return 'base_rent is required for with_rent';
+  }
+  if (t.utility_style === 'separate' && parseAmount(t.separate_max) === null) {
+    return 'separate_max is required for separate';
+  }
+  return null;
+}
+
+// Validates a settings write. Returns { value } (normalized) or { error }.
+export function normalizeSettingValue(key, value) {
+  const raw = value === undefined || value === null ? '' : String(value).trim();
+  if (key === 'rental_account_name') return { value: raw };
+  if (key === 'receipts_folder_id') {
+    const m = raw.match(/\/folders\/([A-Za-z0-9_-]+)/);
+    if (m) return { value: m[1] };
+    return { value: raw.split(/[?#]/)[0].trim() };
+  }
+  if (/^mortgage_interest:\d{4}$/.test(String(key))) {
+    const n = parseAmount(raw);
+    if (n === null || n < 0) return { error: 'value must be a non-negative amount' };
+    return { value: String(n) };
+  }
+  return { error: `unsupported setting key: ${key}` };
+}

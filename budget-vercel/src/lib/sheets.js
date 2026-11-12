@@ -5,7 +5,13 @@ import {
   parseAmount,
   parseBool,
   parseTransactionRow,
+  parseTenantRow,
+  parseReceiptRow,
+  validateTenant,
+  TENANT_HEADERS,
+  RECEIPT_HEADERS,
 } from '@/lib/sheetRows';
+import { getAuth } from '@/lib/google';
 
 // Google Sheets configuration
 const SPREADSHEET_ID = process.env.GOOGLE_SPREADSHEET_ID;
@@ -15,6 +21,9 @@ const SHEETS = {
   ACCOUNTS: 'Accounts',
   TRANSACTIONS: 'Transactions',
   BUDGETS: 'Budgets',
+  SETTINGS: 'Settings',
+  TENANTS: 'Tenants',
+  RECEIPTS: 'Receipts',
 };
 
 const READ_OPTIONS = {
@@ -30,6 +39,9 @@ const cache = {
   accounts: { data: null, timestamp: 0 },
   transactions: { data: null, timestamp: 0 },
   budgets: { data: null, timestamp: 0 },
+  settings: { data: null, timestamp: 0 },
+  tenants: { data: null, timestamp: 0 },
+  receipts: { data: null, timestamp: 0 },
 };
 
 function getCached(key) {
@@ -52,7 +64,11 @@ export function clearCache() {
   cache.accounts = { data: null, timestamp: 0 };
   cache.transactions = { data: null, timestamp: 0 };
   cache.budgets = { data: null, timestamp: 0 };
+  cache.settings = { data: null, timestamp: 0 };
+  cache.tenants = { data: null, timestamp: 0 };
+  cache.receipts = { data: null, timestamp: 0 };
   _sheetsClient = null;
+  _confirmedTabs.clear();
 }
 
 // ============ AUTH (cached client) ============
@@ -62,14 +78,7 @@ let _sheetsClient = null;
 async function getSheets() {
   if (_sheetsClient) return _sheetsClient;
 
-  const credentials = JSON.parse(process.env.GOOGLE_CREDENTIALS_JSON || '{}');
-
-  const auth = new google.auth.GoogleAuth({
-    credentials,
-    scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-  });
-
-  _sheetsClient = google.sheets({ version: 'v4', auth });
+  _sheetsClient = google.sheets({ version: 'v4', auth: getAuth() });
   return _sheetsClient;
 }
 
@@ -349,8 +358,221 @@ export async function getTransactions(filters = {}) {
   };
 }
 
-// Placeholder until the Settings tab lands; callers pass the result to the scope helpers.
-export async function getSettings() { return {}; }
+// ============ SETTINGS / TENANTS / RECEIPTS TABS ============
+
+const _confirmedTabs = new Set();
+
+function colLetter(n) {
+  return String.fromCharCode(64 + n);
+}
+
+// Creates the tab (with headers) when missing; writes headers if row 1 is empty.
+// Never touches other rows. Memoized per process once confirmed.
+export async function ensureTab(name, headers) {
+  if (_confirmedTabs.has(name)) return;
+  const sheets = await getSheets();
+  const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId: SPREADSHEET_ID });
+  const exists = spreadsheet.data.sheets.some(s => s.properties.title === name);
+  const lastCol = colLetter(headers.length);
+
+  if (!exists) {
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId: SPREADSHEET_ID,
+      requestBody: { requests: [{ addSheet: { properties: { title: name } } }] },
+    });
+  }
+  const first = exists
+    ? await sheets.spreadsheets.values.get({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${name}!A1:${lastCol}1`,
+      })
+    : null;
+  const cells = (first && first.data.values && first.data.values[0]) || [];
+  if (cells.every(c => String(c ?? '').trim() === '')) {
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${name}!A1:${lastCol}1`,
+      valueInputOption: 'RAW',
+      requestBody: { values: [headers] },
+    });
+  }
+  _confirmedTabs.add(name);
+}
+
+const SETTINGS_HEADERS = ['key', 'value'];
+
+async function readTabRows(name, headers) {
+  await ensureTab(name, headers);
+  const sheets = await getSheets();
+  const response = await sheets.spreadsheets.values.get({
+    spreadsheetId: SPREADSHEET_ID,
+    range: `${name}!A:${colLetter(headers.length)}`,
+    ...READ_OPTIONS,
+  });
+  return response.data.values || [];
+}
+
+export async function getSettings() {
+  const cached = getCached('settings');
+  if (cached) return cached;
+  const rows = await readTabRows(SHEETS.SETTINGS, SETTINGS_HEADERS);
+  const settings = {};
+  for (const row of rows.slice(1)) {
+    const key = row[0] === undefined || row[0] === null ? '' : String(row[0]).trim();
+    if (!key) continue;
+    settings[key] = row[1] === undefined || row[1] === null ? '' : String(row[1]);
+  }
+  setCache('settings', settings);
+  return settings;
+}
+
+export async function setSetting(key, value) {
+  const rows = await readTabRows(SHEETS.SETTINGS, SETTINGS_HEADERS);
+  const sheets = await getSheets();
+  let rowIndex = -1;
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][0] ?? '').trim() === key) rowIndex = i;
+  }
+  if (rowIndex >= 0) {
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${SHEETS.SETTINGS}!B${rowIndex + 1}`,
+      valueInputOption: 'RAW',
+      requestBody: { values: [[String(value)]] },
+    });
+  } else {
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${SHEETS.SETTINGS}!A:B`,
+      valueInputOption: 'RAW',
+      requestBody: { values: [[key, String(value)]] },
+    });
+  }
+  invalidateCache('settings');
+}
+
+export async function getTenants() {
+  const cached = getCached('tenants');
+  if (cached) return cached;
+  const rows = await readTabRows(SHEETS.TENANTS, TENANT_HEADERS);
+  const tenants = rows.slice(1)
+    .filter(r => r.some(c => String(c ?? '').trim() !== ''))
+    .map(parseTenantRow);
+  setCache('tenants', tenants);
+  return tenants;
+}
+
+export async function saveTenant(t) {
+  const reason = validateTenant(t);
+  if (reason) throw new Error(`Invalid tenant: ${reason}`);
+
+  const rows = await readTabRows(SHEETS.TENANTS, TENANT_HEADERS);
+  const sheets = await getSheets();
+  const ids = rows.slice(1).map(r => parseInt(r[0], 10)).filter(n => !Number.isNaN(n));
+  const existingId = t.id ? Number(t.id) : null;
+  const id = existingId || (ids.length ? Math.max(...ids) + 1 : 1);
+
+  const values = [
+    id,
+    String(t.name).trim(),
+    t.unit || '',
+    Number(t.utility_share),
+    t.utility_style,
+    t.base_rent === null || t.base_rent === undefined || t.base_rent === '' ? '' : parseAmount(t.base_rent),
+    t.separate_max === null || t.separate_max === undefined || t.separate_max === '' ? '' : parseAmount(t.separate_max),
+    t.match_text || '',
+    t.start_month || '',
+    t.end_month || '',
+    t.is_active === false ? false : true,
+  ];
+
+  let rowIndex = -1;
+  if (existingId) {
+    for (let i = 1; i < rows.length; i++) {
+      if (parseInt(rows[i][0], 10) === existingId) rowIndex = i;
+    }
+    if (rowIndex < 0) throw new Error(`Invalid tenant: id ${existingId} not found`);
+  }
+  if (rowIndex >= 0) {
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${SHEETS.TENANTS}!A${rowIndex + 1}:${colLetter(TENANT_HEADERS.length)}${rowIndex + 1}`,
+      valueInputOption: 'RAW',
+      requestBody: { values: [values] },
+    });
+  } else {
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${SHEETS.TENANTS}!A:${colLetter(TENANT_HEADERS.length)}`,
+      valueInputOption: 'RAW',
+      requestBody: { values: [values] },
+    });
+  }
+  invalidateCache('tenants');
+  return parseTenantRow(values);
+}
+
+export async function getReceiptLinks() {
+  const cached = getCached('receipts');
+  if (cached) return cached;
+  const rows = await readTabRows(SHEETS.RECEIPTS, RECEIPT_HEADERS);
+  const links = rows.slice(1).map(parseReceiptRow).filter(l => l.drive_file_id);
+  setCache('receipts', links);
+  return links;
+}
+
+export async function linkReceipt(link) {
+  const rows = await readTabRows(SHEETS.RECEIPTS, RECEIPT_HEADERS);
+  const sheets = await getSheets();
+  const values = [
+    link.drive_file_id,
+    link.file_name || '',
+    link.mime_type || '',
+    link.transaction_id,
+    new Date().toISOString(),
+  ];
+  let rowIndex = -1;
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][0] ?? '').trim() === link.drive_file_id) rowIndex = i;
+  }
+  if (rowIndex >= 0) {
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${SHEETS.RECEIPTS}!A${rowIndex + 1}:E${rowIndex + 1}`,
+      valueInputOption: 'RAW',
+      requestBody: { values: [values] },
+    });
+  } else {
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${SHEETS.RECEIPTS}!A:E`,
+      valueInputOption: 'RAW',
+      requestBody: { values: [values] },
+    });
+  }
+  invalidateCache('receipts');
+  return parseReceiptRow(values);
+}
+
+// Clears transaction_id on the row; never deletes rows.
+export async function unlinkReceipt(driveFileId) {
+  const rows = await readTabRows(SHEETS.RECEIPTS, RECEIPT_HEADERS);
+  const sheets = await getSheets();
+  let rowIndex = -1;
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][0] ?? '').trim() === driveFileId) rowIndex = i;
+  }
+  if (rowIndex < 0) return false;
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: SPREADSHEET_ID,
+    range: `${SHEETS.RECEIPTS}!D${rowIndex + 1}`,
+    valueInputOption: 'RAW',
+    requestBody: { values: [['']] },
+  });
+  invalidateCache('receipts');
+  return true;
+}
+
 
 export async function getAllTransactions() {
   return (await getCachedTransactionRows()).filter(t => t.parse_error === null);
