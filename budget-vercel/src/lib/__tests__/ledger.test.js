@@ -42,3 +42,14 @@ test('a partial payment pays oldest first and leaves the rest open', () => {
   expect(a.owed).toBe(30);
   expect(a.months[0].charges[0].status).toBe('partial');
 });
+test('transfers before start_month are not utility payments or credit', () => {
+  const [a] = buildLedger({ txns: [...txns, pay('2026-03-03', 'Tenant A', 2300), pay('2026-04-03', 'Tenant A', 2300)], tenants: [A, B], now: new Date('2026-07-31T12:00:00Z') });
+  expect(a.credit).toBe(0);
+  expect(a.owed).toBe(97.14);
+  expect(a.months.every((m) => m.month >= '2026-06')).toBe(true);
+});
+test('payments after end_month are ignored', () => {
+  const [a] = buildLedger({ txns: [...txns, pay('2026-08-03', 'Tenant A', 2300)], tenants: [{ ...A, end_month: '2026-07' }], now: new Date('2026-08-10T12:00:00Z') });
+  expect(a.credit).toBe(0);
+  expect(a.months.every((m) => m.month <= '2026-07')).toBe(true);
+});

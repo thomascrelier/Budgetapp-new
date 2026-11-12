@@ -73,6 +73,10 @@ function ledgerFor(tenant, bills, txns, today) {
   const payments = txns
     .map((t) => ({ date: t.date, amount: t.amount, utility_amount: utilityPart(t, tenant) }))
     .filter((p) => p.utility_amount > 0)
+    .filter((p) => {
+      const m = monthOf(p.date);
+      return !(tenant.start_month && m < tenant.start_month) && !(tenant.end_month && m > tenant.end_month);
+    })
     .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
 
   const monthSet = new Set([...charges.map((c) => c.due_month), ...payments.map((p) => monthOf(p.date))]);

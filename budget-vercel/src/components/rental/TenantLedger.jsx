@@ -5,6 +5,7 @@ import { formatMoney } from '@/components/AnimatedNumber';
 import TenantSetup from '@/components/rental/TenantSetup';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const FULL_MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const monthName = (m) => `${MONTHS[Number(m.slice(5, 7)) - 1]} ${m.slice(0, 4)}`;
 const STATUS = { paid: 'Paid', partial: 'Partly paid', open: 'Unpaid' };
 const STATUS_TONE = { paid: 'text-positive', partial: 'text-warning', open: 'text-negative' };
@@ -28,7 +29,7 @@ function TenantCard({ entry }) {
         <ul className="mt-3 space-y-1 text-sm text-text-secondary">
           {open.map((o) => (
             <li key={`${o.label}-${o.bill_date}`}>
-              {o.label}: <span className="tabular">{formatMoney(o.owed, { decimals: 2 })}</span>, expected with the {monthName(o.due_month).split(' ')[0]} payment
+              {o.label}: <span className="tabular">{formatMoney(o.owed, { decimals: 2 })}</span>, expected with the {FULL_MONTHS[Number(o.due_month.slice(5, 7)) - 1]} payment
             </li>
           ))}
         </ul>
@@ -38,7 +39,7 @@ function TenantCard({ entry }) {
           <span className="tabular">{formatMoney(credit, { decimals: 2 })}</span> credit toward future bills
         </p>
       )}
-      <button type="button" onClick={() => setExpanded((v) => !v)} aria-expanded={expanded} aria-controls={panelId}
+      <button type="button" onClick={() => setExpanded((v) => !v)} aria-expanded={expanded} aria-controls={expanded ? panelId : undefined}
         className="mt-4 min-h-11 text-sm text-accent-text hover:underline">
         {expanded ? 'Hide month by month' : 'Show month by month'}
       </button>
@@ -66,10 +67,10 @@ function TenantCard({ entry }) {
                       </td>
                     </tr>
                   ))}
-                  {m.payments.map((p) => (
-                    <tr key={`${p.date}-${p.amount}`} className="border-t border-border">
+                  {m.payments.map((p, i) => (
+                    <tr key={`${p.date}-${p.amount}-${i}`} className="border-t border-border">
                       <td className="py-1 pr-3 text-text-secondary">Payment on {p.date}</td>
-                      <td className="py-1 pr-3 text-right tabular">{formatMoney(p.utility_amount)}</td>
+                      <td className="py-1 pr-3 text-right tabular">{formatMoney(p.utility_amount, { decimals: 2 })}</td>
                       <td className="py-1 text-right text-text-muted">utilities</td>
                     </tr>
                   ))}
