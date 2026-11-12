@@ -1,4 +1,11 @@
 import { google } from 'googleapis';
+import {
+  TRANSACTION_HEADERS,
+  parseAccountRow,
+  parseAmount,
+  parseBool,
+  parseTransactionRow,
+} from '@/lib/sheetRows';
 
 // Google Sheets configuration
 const SPREADSHEET_ID = process.env.GOOGLE_SPREADSHEET_ID;
@@ -8,6 +15,11 @@ const SHEETS = {
   ACCOUNTS: 'Accounts',
   TRANSACTIONS: 'Transactions',
   BUDGETS: 'Budgets',
+};
+
+const READ_OPTIONS = {
+  valueRenderOption: 'UNFORMATTED_VALUE',
+  dateTimeRenderOption: 'FORMATTED_STRING',
 };
 
 // ============ IN-MEMORY CACHE ============
@@ -104,9 +116,26 @@ export async function initializeSheets() {
         range: `${SHEETS.TRANSACTIONS}!A1`,
         valueInputOption: 'RAW',
         requestBody: {
-          values: [['id', 'account_id', 'date', 'description', 'amount', 'category', 'is_verified', 'import_batch_id', 'created_at']],
+          values: [TRANSACTION_HEADERS],
         },
       });
+    }
+
+    // Add the notes / tax_tag headers to an existing Transactions sheet
+    if (sheetNames.includes(SHEETS.TRANSACTIONS)) {
+      const extra = await sheets.spreadsheets.values.get({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${SHEETS.TRANSACTIONS}!J1:K1`,
+      });
+      const cells = (extra.data.values && extra.data.values[0]) || [];
+      if (cells.length === 0) {
+        await sheets.spreadsheets.values.update({
+          spreadsheetId: SPREADSHEET_ID,
+          range: `${SHEETS.TRANSACTIONS}!J1:K1`,
+          valueInputOption: 'RAW',
+          requestBody: { values: [['notes', 'tax_tag']] },
+        });
+      }
     }
 
     // Create Budgets sheet if missing
@@ -142,21 +171,13 @@ async function fetchAccountsFromSheets() {
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId: SPREADSHEET_ID,
     range: `${SHEETS.ACCOUNTS}!A:F`,
+    ...READ_OPTIONS,
   });
 
   const rows = response.data.values || [];
   if (rows.length <= 1) return [];
 
-  const [headers, ...data] = rows;
-
-  return data.map(row => ({
-    id: parseInt(row[0]) || 0,
-    name: row[1] || '',
-    account_type: row[2] || 'checking',
-    initial_balance: parseFloat(row[3]) || 0,
-    is_active: row[4] !== 'false',
-    created_at: row[5] || new Date().toISOString(),
-  }));
+  return rows.slice(1).map(parseAccountRow);
 }
 
 export async function getAccounts(includeInactive = false) {
@@ -246,40 +267,37 @@ export async function initializeDefaultAccounts() {
 
 // ============ TRANSACTIONS ============
 
+// Returns every data row, including rows with parse errors.
 async function fetchTransactionsFromSheets() {
   const sheets = await getSheets();
 
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId: SPREADSHEET_ID,
-    range: `${SHEETS.TRANSACTIONS}!A:I`,
+    range: `${SHEETS.TRANSACTIONS}!A:K`,
+    ...READ_OPTIONS,
   });
 
   const rows = response.data.values || [];
-  if (rows.length <= 1) return [];
+  const parsed = [];
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i];
+    if (!row || row.every(c => c === '' || c === null || c === undefined)) continue;
+    parsed.push(parseTransactionRow(row, i + 1));
+  }
+  return parsed;
+}
 
-  const [headers, ...data] = rows;
-
-  return data.map((row, index) => ({
-    id: parseInt(row[0]) || index + 1,
-    account_id: parseInt(row[1]) || 0,
-    date: row[2] || '',
-    description: row[3] || '',
-    amount: parseFloat(row[4]) || 0,
-    category: row[5] || 'Uncategorized',
-    is_verified: row[6] === 'true',
-    import_batch_id: row[7] || '',
-    created_at: row[8] || '',
-  }));
+async function getCachedTransactionRows() {
+  let all = getCached('transactions');
+  if (!all) {
+    all = await fetchTransactionsFromSheets();
+    setCache('transactions', all);
+  }
+  return all;
 }
 
 export async function getTransactions(filters = {}) {
-  let allTransactions = getCached('transactions');
-  if (!allTransactions) {
-    allTransactions = await fetchTransactionsFromSheets();
-    setCache('transactions', allTransactions);
-  }
-
-  let transactions = [...allTransactions];
+  let transactions = (await getCachedTransactionRows()).filter(t => t.parse_error === null);
 
   // Apply filters
   if (filters.account_id) {
@@ -325,19 +343,21 @@ export async function getTransactions(filters = {}) {
 }
 
 export async function getAllTransactions() {
-  let allTransactions = getCached('transactions');
-  if (!allTransactions) {
-    allTransactions = await fetchTransactionsFromSheets();
-    setCache('transactions', allTransactions);
-  }
-  return allTransactions;
+  return (await getCachedTransactionRows()).filter(t => t.parse_error === null);
+}
+
+export async function getParseIssues() {
+  return (await getCachedTransactionRows()).filter(t => t.parse_error !== null);
 }
 
 export async function createTransactions(transactionsData) {
   const sheets = await getSheets();
-  const existing = await getAllTransactions();
+  // Fresh read so ids never collide with rows added since the cache was filled.
+  const existing = await fetchTransactionsFromSheets();
 
-  let nextId = existing.length > 0 ? Math.max(...existing.map(t => t.id)) + 1 : 1;
+  const ids = existing.map(t => t.id).filter(id => id !== null);
+  const firstId = ids.length > 0 ? Math.max(...ids) + 1 : 1;
+  let nextId = firstId;
   const now = new Date().toISOString();
 
   const rows = transactionsData.map(t => [
@@ -363,36 +383,42 @@ export async function createTransactions(transactionsData) {
 
   invalidateCache('transactions');
 
-  return rows.length;
+  return { created: rows.length, first_id: firstId };
 }
 
-export async function updateTransactionCategory(id, category) {
+const FIELD_COLUMNS = { category: 'F', notes: 'J', tax_tag: 'K' };
+
+export async function updateTransactionFields(id, fields) {
   const sheets = await getSheets();
+  const targetId = parseInt(id);
 
-  // Find the row index
-  const response = await sheets.spreadsheets.values.get({
-    spreadsheetId: SPREADSHEET_ID,
-    range: `${SHEETS.TRANSACTIONS}!A:I`,
-  });
+  // Fresh read: row numbers must be current.
+  const matches = (await fetchTransactionsFromSheets()).filter(t => t.id === targetId);
+  if (matches.length === 0) throw new Error('Transaction not found');
+  if (matches.length > 1) throw new Error('Duplicate transaction id');
+  const row = matches[0];
 
-  const rows = response.data.values || [];
-  const rowIndex = rows.findIndex((row, i) => i > 0 && parseInt(row[0]) === parseInt(id));
+  const data = Object.entries(FIELD_COLUMNS)
+    .filter(([name]) => fields[name] !== undefined)
+    .map(([name, col]) => ({
+      range: `${SHEETS.TRANSACTIONS}!${col}${row.row_number}`,
+      values: [[fields[name]]],
+    }));
 
-  if (rowIndex === -1) {
-    throw new Error('Transaction not found');
+  if (data.length > 0) {
+    await sheets.spreadsheets.values.batchUpdate({
+      spreadsheetId: SPREADSHEET_ID,
+      requestBody: { valueInputOption: 'RAW', data },
+    });
   }
-
-  // Update the category (column F = index 5)
-  await sheets.spreadsheets.values.update({
-    spreadsheetId: SPREADSHEET_ID,
-    range: `${SHEETS.TRANSACTIONS}!F${rowIndex + 1}`,
-    valueInputOption: 'RAW',
-    requestBody: { values: [[category]] },
-  });
 
   invalidateCache('transactions');
 
-  return { success: true };
+  const updated = { ...row };
+  for (const name of Object.keys(FIELD_COLUMNS)) {
+    if (fields[name] !== undefined) updated[name] = fields[name];
+  }
+  return updated;
 }
 
 // ============ BUDGETS ============
@@ -403,20 +429,19 @@ async function fetchBudgetsFromSheets() {
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId: SPREADSHEET_ID,
     range: `${SHEETS.BUDGETS}!A:F`,
+    ...READ_OPTIONS,
   });
 
   const rows = response.data.values || [];
   if (rows.length <= 1) return [];
 
-  const [headers, ...data] = rows;
-
-  return data.map(row => ({
+  return rows.slice(1).map(row => ({
     id: parseInt(row[0]) || 0,
-    category_name: row[1] || '',
-    monthly_limit: parseFloat(row[2]) || 0,
-    alert_threshold: parseFloat(row[3]) || 80,
-    is_active: row[4] !== 'false',
-    created_at: row[5] || '',
+    category_name: row[1] === undefined || row[1] === null ? '' : String(row[1]),
+    monthly_limit: parseAmount(row[2]) ?? 0,
+    alert_threshold: parseAmount(row[3]) ?? 80,
+    is_active: parseBool(row[4], true),
+    created_at: row[5] === undefined || row[5] === null ? '' : String(row[5]),
   }));
 }
 

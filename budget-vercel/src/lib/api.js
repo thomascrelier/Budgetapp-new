@@ -26,11 +26,12 @@ export const api = {
     if (params.limit) searchParams.set('limit', params.limit);
     return fetch(`${API_BASE}/transactions?${searchParams}`).then(r => r.json());
   },
-  updateCategory: (id, category) => fetch(`${API_BASE}/transactions/${id}/category`, {
+  updateTransaction: (id, fields) => fetch(`${API_BASE}/transactions/${id}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ category }),
+    body: JSON.stringify(fields),
   }).then(r => r.json()),
+  updateCategory: (id, category) => api.updateTransaction(id, { category }),
 
   // Budgets
   getBudgets: () => fetch(`${API_BASE}/budgets`).then(r => r.json()),

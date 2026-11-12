@@ -114,7 +114,7 @@ export async function POST(request) {
     }
 
     // Save transactions
-    const created = await createTransactions(transactions);
+    const { created } = await createTransactions(transactions);
 
     return NextResponse.json({
       success: true,
