@@ -23,15 +23,16 @@ export function formatMoney(value, { signed = false, decimals = 0 } = {}) {
     .replace('-', MINUS);
 }
 
-/** Axis ticks: $1.2K, $15K, −$800. */
+/** Axis ticks: $1.2K, $15K, −$800 (whole dollars below $1,000, never −$745.2). */
 export function formatMoneyCompact(value) {
+  const n = Number(value) || 0;
   return new Intl.NumberFormat('en-CA', {
     style: 'currency',
     currency: 'CAD',
     notation: 'compact',
-    maximumFractionDigits: 1,
+    maximumFractionDigits: Math.abs(n) < 1000 ? 0 : 1,
   })
-    .format(Number(value) || 0)
+    .format(n)
     .replace('-', MINUS);
 }
 

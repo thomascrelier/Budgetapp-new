@@ -255,7 +255,6 @@ export async function initializeDefaultAccounts() {
   const defaultAccounts = [
     { name: 'Main Chequing', account_type: 'checking', initial_balance: 0 },
     { name: 'CIBC Rental', account_type: 'checking', initial_balance: 0 },
-    { name: 'Visa Credit Card', account_type: 'credit_card', initial_balance: 0 },
   ];
 
   const created = [];

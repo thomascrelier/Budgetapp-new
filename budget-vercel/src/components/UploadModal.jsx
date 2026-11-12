@@ -234,7 +234,7 @@ export default function UploadModal({ isOpen, onClose, onSuccess }) {
   );
 
   const amountCell = (amount) => (
-    <span className={`tabular ${amount > 0 ? 'text-positive' : 'text-text-primary'}`}>{formatMoney(amount, { decimals: 2 })}</span>
+    <span className={`tabular whitespace-nowrap shrink-0 ${amount > 0 ? 'text-positive' : 'text-text-primary'}`}>{formatMoney(amount, { decimals: 2 })}</span>
   );
 
   const reviewBody = preview && (

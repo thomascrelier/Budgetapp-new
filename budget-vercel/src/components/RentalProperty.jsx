@@ -37,9 +37,7 @@ const summaryItemVariants = {
 const FIRST_YEAR = 2024;
 
 const currency0 = new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD', minimumFractionDigits: 0, maximumFractionDigits: 0 });
-const currency2 = new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD', minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const formatCurrency = (value) => currency0.format(value || 0);
-const formatCurrencyDecimal = (value) => currency2.format(value || 0);
 const formatSigned = (value, fmt = formatCurrency) => `${value > 0 ? '+' : ''}${fmt(value)}`;
 const formatAxis = (v) => {
   const abs = Math.abs(v);
@@ -143,10 +141,12 @@ function RentalOverview({ year }) {
     .filter(c => !c.is_income)
     .map(c => ({ category: c.category, [String(year)]: c.selected_year_total, [String(prev_year)]: c.prev_year_total }));
 
-  const t776_pie_data = category_breakdown
+  const expensePieData = category_breakdown
     .filter(c => !c.is_income && c.selected_year_total > 0)
     .map(c => ({ name: c.category, value: c.selected_year_total }));
-  const pieTotal = t776_pie_data.reduce((s, d) => s + (d.value || 0), 0);
+  const pieTotal = expensePieData.reduce((s, d) => s + (d.value || 0), 0);
+  // The Category Details dots use the pie's colours; rows not in the pie (income, no spend this year) get none.
+  const pieColorOf = new Map(expensePieData.map((d, i) => [d.name, pieColors[i % pieColors.length]]));
 
   const incomeDeltaColor = (dollars) => dollars >= 0 ? 'text-positive' : 'text-negative';
   const expenseDeltaColor = (dollars) => dollars <= 0 ? 'text-positive' : 'text-negative';
@@ -250,13 +250,13 @@ function RentalOverview({ year }) {
 
           <section className="glass-card rounded-xl p-4 md:p-6 min-w-0" aria-labelledby="breakdown-heading">
             <h2 id="breakdown-heading" className="text-lg font-semibold text-text-primary mb-4">Expense Breakdown</h2>
-            {t776_pie_data.length > 0 ? (
+            {expensePieData.length > 0 ? (
               <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] gap-4 items-center">
                 <div className="h-48 md:h-56" aria-hidden="true">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
-                      <Pie data={t776_pie_data} cx="50%" cy="50%" innerRadius="55%" outerRadius="90%" paddingAngle={1} dataKey="value" nameKey="name" stroke="none">
-                        {t776_pie_data.map((entry, index) => (<Cell key={`cell-${index}`} fill={pieColors[index % pieColors.length]} />))}
+                      <Pie data={expensePieData} cx="50%" cy="50%" innerRadius="55%" outerRadius="90%" paddingAngle={1} dataKey="value" nameKey="name" stroke="none">
+                        {expensePieData.map((entry, index) => (<Cell key={`cell-${index}`} fill={pieColors[index % pieColors.length]} />))}
                       </Pie>
                       <Tooltip formatter={(value) => formatCurrency(value)} contentStyle={tooltipStyle} />
                     </PieChart>
@@ -264,7 +264,7 @@ function RentalOverview({ year }) {
                 </div>
                 {/* The legend doubles as the chart's text alternative: name, amount, share. */}
                 <ul className="space-y-2 text-sm tabular">
-                  {t776_pie_data.map((entry, index) => (
+                  {expensePieData.map((entry, index) => (
                     <li key={entry.name} className="flex items-center gap-2">
                       <span aria-hidden="true" className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: pieColors[index % pieColors.length] }} />
                       <span className="text-text-secondary truncate min-w-0 flex-1">{entry.name}</span>
@@ -319,11 +319,11 @@ function RentalOverview({ year }) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/50">
-                  {category_breakdown.map((item, index) => (
+                  {category_breakdown.map((item) => (
                     <tr key={item.category} className="hover:bg-surface-hover/50 transition-colors">
                       <th scope="row" className="px-4 md:px-6 py-4 text-left whitespace-nowrap font-normal">
                         <div className="flex items-center gap-3">
-                          <span aria-hidden="true" className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: pieColors[index % pieColors.length] }} />
+                          <span aria-hidden="true" className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: pieColorOf.get(item.category) || 'transparent' }} />
                           <span className="font-medium text-text-primary">{item.category}</span>
                           {item.is_income && (<span className="text-xs bg-positive/10 text-positive px-2 py-0.5 rounded-full">Income</span>)}
                         </div>
