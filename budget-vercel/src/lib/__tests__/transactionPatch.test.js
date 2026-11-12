@@ -13,14 +13,23 @@ describe('PATCH /api/transactions/[id]', () => {
     vi.clearAllMocks();
   });
 
-  const call = (body) => PATCH(
-    new Request('http://localhost/api/transactions/7', {
+  const call = (body, id = '7') => PATCH(
+    new Request(`http://localhost/api/transactions/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body,
     }),
-    { params: Promise.resolve({ id: '7' }) },
+    { params: Promise.resolve({ id }) },
   );
+
+  test('an id that is not a whole number is a 400 and writes nothing', async () => {
+    // parseInt would read "5.png" as 5.
+    for (const id of ['5.png', '5abc', '-5', '0x5', '']) {
+      const res = await call(JSON.stringify({ category: 'Groceries' }), id);
+      expect(res.status, id).toBe(400);
+    }
+    expect(sheets.updateTransactionFields).not.toHaveBeenCalled();
+  });
 
   test('malformed JSON is a 400 and writes nothing', async () => {
     const res = await call('{"category": "Groceries"');

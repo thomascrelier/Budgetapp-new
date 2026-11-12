@@ -1,13 +1,15 @@
 import { test, expect, beforeAll, describe } from 'vitest';
 import { NextRequest } from 'next/server';
 import { encode } from 'next-auth/jwt';
+import { unstable_doesMiddlewareMatch } from 'next/experimental/testing/server';
 
 const SECRET = 'test-secret';
 let proxy;
+let config;
 
 beforeAll(async () => {
   process.env.NEXTAUTH_SECRET = SECRET;
-  proxy = (await import('@/proxy')).default;
+  ({ default: proxy, config } = await import('@/proxy'));
 });
 
 const request = (path, cookie) => new NextRequest(`http://localhost:3000${path}`, {
@@ -52,6 +54,28 @@ describe('proxy: every page and API route needs a session', () => {
     for (const path of ['/login', '/api/auth/providers']) {
       const res = await proxy(request(path));
       expect(res === undefined || res.headers.get('x-middleware-next') === '1').toBe(true);
+    }
+  });
+});
+
+// The matcher decides which requests reach the proxy at all, compiled the way Next compiles it.
+describe('proxy matcher', () => {
+  const runs = (path) => unstable_doesMiddlewareMatch({ config, url: `http://localhost:3000${path}` });
+
+  test('every API path goes through the proxy, including ones that look like files', () => {
+    // /api/transactions/5.png reaches app/api/transactions/[id]/route.js like /api/transactions/5 does.
+    for (const path of ['/api/transactions/5', '/api/transactions/5.png', '/api/transactions/5.txt', '/api/transactions/5.xml', '/api/init', '/api/settings']) {
+      expect(runs(path), path).toBe(true);
+    }
+  });
+
+  test('pages go through the proxy', () => {
+    for (const path of ['/', '/5.png', '/robots.txt']) expect(runs(path), path).toBe(true);
+  });
+
+  test('sign-in routes and Next static files skip it', () => {
+    for (const path of ['/api/auth/session', '/api/auth/providers', '/api/auth/callback/google', '/login', '/_next/static/x.js', '/_next/image/x', '/favicon.ico']) {
+      expect(runs(path), path).toBe(false);
     }
   });
 });

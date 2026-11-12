@@ -6,6 +6,10 @@ const FIELDS = ['category', 'notes', 'tax_tag'];
 export async function PATCH(request, { params }) {
   try {
     const { id } = await params;
+    // Whole numbers only: parseInt would read "5.png" as 5.
+    if (!/^\d+$/.test(String(id ?? '')) || Number(id) <= 0) {
+      return NextResponse.json({ error: 'Invalid transaction id' }, { status: 400 });
+    }
     let body;
     try {
       body = await request.json();
@@ -24,7 +28,7 @@ export async function PATCH(request, { params }) {
       return NextResponse.json({ error: 'No fields to update' }, { status: 400 });
     }
 
-    const transaction = await updateTransactionFields(parseInt(id), fields);
+    const transaction = await updateTransactionFields(Number(id), fields);
     return NextResponse.json({ transaction });
   } catch (error) {
     if (error.message === 'Transaction not found') {
