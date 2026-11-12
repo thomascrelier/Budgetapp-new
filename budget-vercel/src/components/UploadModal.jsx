@@ -19,6 +19,7 @@ export default function UploadModal({ isOpen, onClose, onSuccess }) {
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const requestId = useRef(0);
+  const previewRef = useRef(null);
 
   const dialogRef = useRef(null);
   const closeButtonRef = useRef(null);
@@ -100,10 +101,14 @@ export default function UploadModal({ isOpen, onClose, onSuccess }) {
   useEffect(() => {
     if (result) closeButtonRef.current?.focus();
   }, [result]);
+  previewRef.current = preview;
   const hasPreview = Boolean(preview);
   useEffect(() => {
     if (hasPreview) dialogRef.current?.focus();
   }, [hasPreview]);
+
+  // A failed re-preview must leave the select matching the plan on screen.
+  const revertAccount = () => setSelectedAccount(previewRef.current?.account_id ?? '');
 
   const runPreview = async (file, accountId) => {
     const id = ++requestId.current;
@@ -111,12 +116,12 @@ export default function UploadModal({ isOpen, onClose, onSuccess }) {
     try {
       const data = await api.previewImport(file, accountId);
       if (id !== requestId.current) return;
-      if (data.error) { setError(data.error); return; }
+      if (data.error) { revertAccount(); setError(data.error); return; }
       setPreview(data);
       setSelectedAccount(data.account_id ?? '');
       setCheckedOlder(new Set());
     } catch (err) {
-      if (id === requestId.current) setError(err.message || 'Could not read the file');
+      if (id === requestId.current) { revertAccount(); setError(err.message || 'Could not read the file'); }
     } finally {
       if (id === requestId.current) setPreviewing(false);
     }
@@ -132,11 +137,13 @@ export default function UploadModal({ isOpen, onClose, onSuccess }) {
 
   const handleAccountChange = (e) => {
     const value = e.target.value;
+    setError(null);
     setSelectedAccount(value);
     if (value && selectedFile) runPreview(selectedFile, value);
   };
 
-  const plan = preview?.plan;
+  const planMatchesAccount = Boolean(preview) && String(selectedAccount) === String(preview.account_id);
+  const plan = planMatchesAccount ? preview.plan : null;
   const olderRows = plan?.older || [];
   const rowsToAdd = plan ? [...plan.new, ...olderRows.filter((_, i) => checkedOlder.has(i))] : [];
   const addCount = rowsToAdd.length;
@@ -148,7 +155,7 @@ export default function UploadModal({ isOpen, onClose, onSuccess }) {
   });
 
   const handleCommit = async () => {
-    if (!addCount || !selectedAccount) return;
+    if (!addCount || !selectedAccount || !planMatchesAccount) return;
     setUploading(true); setError(null);
     try {
       const data = await api.commitImport(selectedAccount, rowsToAdd.map(({ date, description, amount, category }) => ({ date, description, amount, category })));
@@ -459,7 +466,7 @@ export default function UploadModal({ isOpen, onClose, onSuccess }) {
                   type="button"
                   whileTap={addCount > 0 && !busy ? { scale: 0.97 } : undefined}
                   onClick={handleCommit}
-                  disabled={addCount === 0 || busy || !selectedAccount}
+                  disabled={addCount === 0 || busy || !selectedAccount || !planMatchesAccount}
                   aria-busy={uploading}
                   className="min-h-11 md:min-h-10 inline-flex items-center gap-2 px-4 py-2 bg-accent text-on-accent rounded-lg font-semibold hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-accent transition-colors text-sm"
                 >

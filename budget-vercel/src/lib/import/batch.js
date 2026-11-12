@@ -1,4 +1,5 @@
 import { TZ } from '@/lib/dates';
+import { parseDate } from '@/lib/sheetRows';
 
 const fmt = new Intl.DateTimeFormat('en-CA', {
   timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit',
@@ -19,7 +20,8 @@ export function validateCommitRows(rows) {
     const r = rows[i] || {};
     const description = String(r.description ?? '').trim();
     const amount = typeof r.amount === 'number' ? r.amount : Number.NaN;
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(r.date ?? ''))) return { error: `Row ${i + 1}: date must be YYYY-MM-DD` };
+    const dateStr = String(r.date ?? '');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr) || parseDate(dateStr) !== dateStr) return { error: `Row ${i + 1}: date must be YYYY-MM-DD` };
     if (!Number.isFinite(amount)) return { error: `Row ${i + 1}: amount must be a number` };
     if (!description) return { error: `Row ${i + 1}: description is required` };
     out.push({ date: r.date, description, amount, category: String(r.category || '').trim() || 'Uncategorized' });

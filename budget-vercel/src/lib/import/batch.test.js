@@ -22,6 +22,8 @@ describe('validateCommitRows', () => {
   });
   it('rejects bad date, amount, description', () => {
     expect(validateCommitRows([{ ...ok, date: '1/5/2026' }]).error).toMatch(/Row 1/);
+    expect(validateCommitRows([{ ...ok, date: '2024-13-45' }]).error).toMatch(/Row 1/);
+    expect(validateCommitRows([{ ...ok, date: '2026-02-30' }]).error).toMatch(/Row 1/);
     expect(validateCommitRows([ok, { ...ok, amount: '3' }]).error).toMatch(/Row 2/);
     expect(validateCommitRows([{ ...ok, amount: NaN }]).error).toBeTruthy();
     expect(validateCommitRows([{ ...ok, description: '  ' }]).error).toBeTruthy();
