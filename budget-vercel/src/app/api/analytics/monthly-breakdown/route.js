@@ -1,15 +1,14 @@
 import { NextResponse } from 'next/server';
-import { getAllTransactions } from '@/lib/sheets';
-
-// Categories that represent money movement, not actual spending
-const NON_SPENDING_CATEGORIES = ['Transfer', 'Transfers & Payments', 'Investments'];
+import { getAccounts, getAllTransactions, getSettings } from '@/lib/sheets';
+import { resolveAccountIds } from '@/lib/scope';
+import { summarize, inMonth, round2 } from '@/lib/analytics';
+import { classify } from '@/lib/classify';
+import { currentMonth, todayISO } from '@/lib/dates';
 
 export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url);
     const month = searchParams.get('month');
-    const accountIdsParam = searchParams.get('account_ids');
-    const accountIds = accountIdsParam ? accountIdsParam.split(',').map(Number) : null;
 
     if (!month || !/^\d{4}-\d{2}$/.test(month)) {
       return NextResponse.json(
@@ -18,84 +17,48 @@ export async function GET(request) {
       );
     }
 
-    let transactions = await getAllTransactions();
+    const [accounts, allTransactions, settings] = await Promise.all([
+      getAccounts(),
+      getAllTransactions(),
+      getSettings(),
+    ]);
+    const accountIds = resolveAccountIds(searchParams, accounts, settings);
+    const transactions = inMonth(allTransactions, month).filter(t => accountIds.includes(t.account_id));
 
-    // Filter to the specified month
-    transactions = transactions.filter(t => t.date.startsWith(month));
+    const { income, spending, byCategory } = summarize(transactions);
+    const spendingTxns = transactions.filter(t => ['expense', 'refund'].includes(classify(t)));
 
-    // Filter by account_ids if provided
-    if (accountIds) {
-      transactions = transactions.filter(t => accountIds.includes(t.account_id));
+    // total is signed like the sheet: negative means net spending
+    const counts = {};
+    for (const t of spendingTxns) {
+      const c = t.category || 'Uncategorized';
+      counts[c] = (counts[c] || 0) + 1;
     }
-
-    // Calculate income and expenses (excluding non-spending categories)
-    let income = 0;
-    let expenses = 0;
-
-    for (const t of transactions) {
-      const isNonSpending = NON_SPENDING_CATEGORIES.includes(t.category);
-      if (t.amount > 0 && !isNonSpending) income += t.amount;
-      else if (t.amount < 0 && !isNonSpending) expenses += Math.abs(t.amount);
-    }
-
-    // Build category breakdown
-    const categoryMap = {};
-    for (const t of transactions) {
-      const isNonSpending = NON_SPENDING_CATEGORIES.includes(t.category);
-      if (isNonSpending) continue;
-
-      const cat = t.category || 'Uncategorized';
-      if (!categoryMap[cat]) {
-        categoryMap[cat] = { category: cat, total: 0, count: 0 };
-      }
-      categoryMap[cat].total += t.amount;
-      categoryMap[cat].count += 1;
-    }
-
-    const category_breakdown = Object.values(categoryMap)
+    const category_breakdown = Object.entries(byCategory)
+      .map(([category, spent]) => ({ category, total: round2(-spent), count: counts[category] || 0 }))
       .sort((a, b) => Math.abs(b.total) - Math.abs(a.total));
 
-    // Build daily spending (negative amounts only, excluding non-spending)
+    // Daily net spending, capped to today (Toronto) in the current month
+    const [year, monthNum] = month.split('-').map(Number);
+    const daysInMonth = new Date(Date.UTC(year, monthNum, 0)).getUTCDate();
+    const lastDay = month === currentMonth() ? Number(todayISO().slice(8, 10)) : daysInMonth;
+
     const dailyMap = {};
-
-    // Determine all days in the month
-    const [yearStr, monthStr] = month.split('-');
-    const year = parseInt(yearStr);
-    const monthNum = parseInt(monthStr);
-    const daysInMonth = new Date(year, monthNum, 0).getDate();
-
-    // Cap to today if current month
-    const today = new Date();
-    const isCurrentMonth =
-      today.getFullYear() === year && today.getMonth() + 1 === monthNum;
-    const lastDay = isCurrentMonth ? today.getDate() : daysInMonth;
-
     for (let d = 1; d <= lastDay; d++) {
-      const dateStr = `${month}-${String(d).padStart(2, '0')}`;
-      dailyMap[dateStr] = 0;
+      dailyMap[`${month}-${String(d).padStart(2, '0')}`] = 0;
     }
-
-    for (const t of transactions) {
-      const isNonSpending = NON_SPENDING_CATEGORIES.includes(t.category);
-      if (t.amount < 0 && !isNonSpending && dailyMap.hasOwnProperty(t.date)) {
-        dailyMap[t.date] += Math.abs(t.amount);
-      }
+    for (const t of spendingTxns) {
+      if (t.date in dailyMap) dailyMap[t.date] -= t.amount;
     }
-
-    const sortedDates = Object.keys(dailyMap).sort();
     let cumulative = 0;
-    const daily_spending = sortedDates.map(date => {
-      cumulative += dailyMap[date];
-      return {
-        date,
-        amount: dailyMap[date],
-        cumulative,
-      };
+    const daily_spending = Object.keys(dailyMap).sort().map((date) => {
+      const amount = round2(dailyMap[date]);
+      cumulative = round2(cumulative + amount);
+      return { date, amount, cumulative };
     });
 
-    // Top 10 transactions by absolute amount (excluding non-spending)
     const top_transactions = transactions
-      .filter(t => !NON_SPENDING_CATEGORIES.includes(t.category))
+      .filter(t => classify(t) === 'expense')
       .sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount))
       .slice(0, 10)
       .map(t => ({
@@ -108,8 +71,8 @@ export async function GET(request) {
     return NextResponse.json({
       month,
       income,
-      expenses,
-      net: income - expenses,
+      expenses: spending,
+      net: round2(income - spending),
       category_breakdown,
       daily_spending,
       top_transactions,

@@ -1,4 +1,17 @@
 import { google } from 'googleapis';
+import {
+  TRANSACTION_HEADERS,
+  parseAccountRow,
+  parseAmount,
+  parseBool,
+  parseTransactionRow,
+  parseTenantRow,
+  parseReceiptRow,
+  validateTenant,
+  TENANT_HEADERS,
+  RECEIPT_HEADERS,
+} from '@/lib/sheetRows';
+import { getAuth } from '@/lib/google';
 
 // Google Sheets configuration
 const SPREADSHEET_ID = process.env.GOOGLE_SPREADSHEET_ID;
@@ -8,6 +21,14 @@ const SHEETS = {
   ACCOUNTS: 'Accounts',
   TRANSACTIONS: 'Transactions',
   BUDGETS: 'Budgets',
+  SETTINGS: 'Settings',
+  TENANTS: 'Tenants',
+  RECEIPTS: 'Receipts',
+};
+
+const READ_OPTIONS = {
+  valueRenderOption: 'UNFORMATTED_VALUE',
+  dateTimeRenderOption: 'FORMATTED_STRING',
 };
 
 // ============ IN-MEMORY CACHE ============
@@ -18,6 +39,9 @@ const cache = {
   accounts: { data: null, timestamp: 0 },
   transactions: { data: null, timestamp: 0 },
   budgets: { data: null, timestamp: 0 },
+  settings: { data: null, timestamp: 0 },
+  tenants: { data: null, timestamp: 0 },
+  receipts: { data: null, timestamp: 0 },
 };
 
 function getCached(key) {
@@ -40,7 +64,11 @@ export function clearCache() {
   cache.accounts = { data: null, timestamp: 0 };
   cache.transactions = { data: null, timestamp: 0 };
   cache.budgets = { data: null, timestamp: 0 };
+  cache.settings = { data: null, timestamp: 0 };
+  cache.tenants = { data: null, timestamp: 0 };
+  cache.receipts = { data: null, timestamp: 0 };
   _sheetsClient = null;
+  _confirmedTabs.clear();
 }
 
 // ============ AUTH (cached client) ============
@@ -50,14 +78,7 @@ let _sheetsClient = null;
 async function getSheets() {
   if (_sheetsClient) return _sheetsClient;
 
-  const credentials = JSON.parse(process.env.GOOGLE_CREDENTIALS_JSON || '{}');
-
-  const auth = new google.auth.GoogleAuth({
-    credentials,
-    scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-  });
-
-  _sheetsClient = google.sheets({ version: 'v4', auth });
+  _sheetsClient = google.sheets({ version: 'v4', auth: getAuth() });
   return _sheetsClient;
 }
 
@@ -104,9 +125,26 @@ export async function initializeSheets() {
         range: `${SHEETS.TRANSACTIONS}!A1`,
         valueInputOption: 'RAW',
         requestBody: {
-          values: [['id', 'account_id', 'date', 'description', 'amount', 'category', 'is_verified', 'import_batch_id', 'created_at']],
+          values: [TRANSACTION_HEADERS],
         },
       });
+    }
+
+    // Add the notes / tax_tag headers to an existing Transactions sheet
+    if (sheetNames.includes(SHEETS.TRANSACTIONS)) {
+      const extra = await sheets.spreadsheets.values.get({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${SHEETS.TRANSACTIONS}!J1:K1`,
+      });
+      const cells = (extra.data.values && extra.data.values[0]) || [];
+      if (cells.length === 0) {
+        await sheets.spreadsheets.values.update({
+          spreadsheetId: SPREADSHEET_ID,
+          range: `${SHEETS.TRANSACTIONS}!J1:K1`,
+          valueInputOption: 'RAW',
+          requestBody: { values: [['notes', 'tax_tag']] },
+        });
+      }
     }
 
     // Create Budgets sheet if missing
@@ -142,21 +180,13 @@ async function fetchAccountsFromSheets() {
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId: SPREADSHEET_ID,
     range: `${SHEETS.ACCOUNTS}!A:F`,
+    ...READ_OPTIONS,
   });
 
   const rows = response.data.values || [];
   if (rows.length <= 1) return [];
 
-  const [headers, ...data] = rows;
-
-  return data.map(row => ({
-    id: parseInt(row[0]) || 0,
-    name: row[1] || '',
-    account_type: row[2] || 'checking',
-    initial_balance: parseFloat(row[3]) || 0,
-    is_active: row[4] !== 'false',
-    created_at: row[5] || new Date().toISOString(),
-  }));
+  return rows.slice(1).map(parseAccountRow);
 }
 
 export async function getAccounts(includeInactive = false) {
@@ -225,7 +255,6 @@ export async function initializeDefaultAccounts() {
   const defaultAccounts = [
     { name: 'Main Chequing', account_type: 'checking', initial_balance: 0 },
     { name: 'CIBC Rental', account_type: 'checking', initial_balance: 0 },
-    { name: 'Visa Credit Card', account_type: 'credit_card', initial_balance: 0 },
   ];
 
   const created = [];
@@ -246,40 +275,47 @@ export async function initializeDefaultAccounts() {
 
 // ============ TRANSACTIONS ============
 
-async function fetchTransactionsFromSheets() {
+// { values, transactions }: the raw rows (header included) and every parsed data row, including rows
+// with parse errors.
+async function readTransactionSheet() {
   const sheets = await getSheets();
 
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId: SPREADSHEET_ID,
-    range: `${SHEETS.TRANSACTIONS}!A:I`,
+    range: `${SHEETS.TRANSACTIONS}!A:K`,
+    ...READ_OPTIONS,
   });
 
-  const rows = response.data.values || [];
-  if (rows.length <= 1) return [];
+  const values = response.data.values || [];
+  const transactions = [];
+  for (let i = 1; i < values.length; i++) {
+    const row = values[i];
+    if (!row || row.every(c => c === '' || c === null || c === undefined)) continue;
+    transactions.push(parseTransactionRow(row, i + 1));
+  }
+  return { values, transactions };
+}
 
-  const [headers, ...data] = rows;
+async function fetchTransactionsFromSheets() {
+  return (await readTransactionSheet()).transactions;
+}
 
-  return data.map((row, index) => ({
-    id: parseInt(row[0]) || index + 1,
-    account_id: parseInt(row[1]) || 0,
-    date: row[2] || '',
-    description: row[3] || '',
-    amount: parseFloat(row[4]) || 0,
-    category: row[5] || 'Uncategorized',
-    is_verified: row[6] === 'true',
-    import_batch_id: row[7] || '',
-    created_at: row[8] || '',
-  }));
+async function getCachedTransactionRows() {
+  let all = getCached('transactions');
+  if (!all) {
+    all = await fetchTransactionsFromSheets();
+    setCache('transactions', all);
+  }
+  return all;
 }
 
 export async function getTransactions(filters = {}) {
-  let allTransactions = getCached('transactions');
-  if (!allTransactions) {
-    allTransactions = await fetchTransactionsFromSheets();
-    setCache('transactions', allTransactions);
-  }
+  const all = (await getCachedTransactionRows()).filter(t => t.parse_error === null);
 
-  let transactions = [...allTransactions];
+  // Categories come from every transaction, so the dropdown never shrinks with the filters or the page
+  const categories = [...new Set(all.map(t => t.category).filter(Boolean))].sort();
+
+  let transactions = all;
 
   // Apply filters
   if (filters.account_id) {
@@ -287,6 +323,11 @@ export async function getTransactions(filters = {}) {
   }
   if (filters.category) {
     transactions = transactions.filter(t => t.category === filters.category);
+  }
+  if (filters.type === 'income') {
+    transactions = transactions.filter(t => t.amount > 0);
+  } else if (filters.type === 'expense') {
+    transactions = transactions.filter(t => t.amount < 0);
   }
   if (filters.start_date) {
     transactions = transactions.filter(t => t.date >= filters.start_date);
@@ -300,7 +341,7 @@ export async function getTransactions(filters = {}) {
   }
 
   // Sort by date descending
-  transactions.sort((a, b) => b.date.localeCompare(a.date));
+  transactions = [...transactions].sort((a, b) => b.date.localeCompare(a.date));
 
   // Enrich with account names
   const accounts = await getAccounts(true);
@@ -309,9 +350,6 @@ export async function getTransactions(filters = {}) {
     ...t,
     account_name: accountMap[t.account_id] || 'Unknown',
   }));
-
-  // Collect unique categories from all transactions (before pagination)
-  const categories = [...new Set(transactions.map(t => t.category).filter(Boolean))].sort();
 
   // Pagination
   const skip = filters.skip || 0;
@@ -324,20 +362,262 @@ export async function getTransactions(filters = {}) {
   };
 }
 
-export async function getAllTransactions() {
-  let allTransactions = getCached('transactions');
-  if (!allTransactions) {
-    allTransactions = await fetchTransactionsFromSheets();
-    setCache('transactions', allTransactions);
-  }
-  return allTransactions;
+// ============ SETTINGS / TENANTS / RECEIPTS TABS ============
+
+const _confirmedTabs = new Set();
+
+function colLetter(n) {
+  return String.fromCharCode(64 + n);
 }
 
-export async function createTransactions(transactionsData) {
-  const sheets = await getSheets();
-  const existing = await getAllTransactions();
+// values.get leaves out trailing empty rows, so `rows.length` (header included) is the last row holding
+// anything. Appending at the row after it, instead of letting Sheets look for the end of a "table", keeps
+// a cleared row in the middle of the data from ending the table early and new rows landing on old ones.
+export function appendRangeAfter(tab, rows) {
+  return `${tab}!A${(rows ? rows.length : 0) + 1}`;
+}
 
-  let nextId = existing.length > 0 ? Math.max(...existing.map(t => t.id)) + 1 : 1;
+async function appendRows(sheets, tab, existingRows, values) {
+  await sheets.spreadsheets.values.append({
+    spreadsheetId: SPREADSHEET_ID,
+    range: appendRangeAfter(tab, existingRows),
+    valueInputOption: 'RAW',
+    insertDataOption: 'INSERT_ROWS',
+    requestBody: { values },
+  });
+}
+
+function sheetErrorMessage(err) {
+  return String(err?.response?.data?.error?.message || err?.message || '');
+}
+
+// Creates the tab (with headers) when missing; writes headers if row 1 is empty.
+// Never touches other rows. Memoized per process once confirmed.
+export async function ensureTab(name, headers) {
+  if (_confirmedTabs.has(name)) return;
+  const sheets = await getSheets();
+  const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId: SPREADSHEET_ID });
+  const exists = spreadsheet.data.sheets.some(s => s.properties.title === name);
+  const lastCol = colLetter(headers.length);
+
+  let created = false;
+  if (!exists) {
+    try {
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId: SPREADSHEET_ID,
+        requestBody: { requests: [{ addSheet: { properties: { title: name } } }] },
+      });
+      created = true;
+    } catch (err) {
+      // Two first requests at once: the other one made the tab between our check and our addSheet.
+      if (!/already exists/i.test(sheetErrorMessage(err))) throw err;
+    }
+  }
+  const first = created
+    ? null
+    : await sheets.spreadsheets.values.get({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${name}!A1:${lastCol}1`,
+      });
+  const cells = (first && first.data.values && first.data.values[0]) || [];
+  if (cells.every(c => String(c ?? '').trim() === '')) {
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${name}!A1:${lastCol}1`,
+      valueInputOption: 'RAW',
+      requestBody: { values: [headers] },
+    });
+  }
+  _confirmedTabs.add(name);
+}
+
+const SETTINGS_HEADERS = ['key', 'value'];
+
+async function readTabRows(name, headers) {
+  await ensureTab(name, headers);
+  const sheets = await getSheets();
+  const response = await sheets.spreadsheets.values.get({
+    spreadsheetId: SPREADSHEET_ID,
+    range: `${name}!A:${colLetter(headers.length)}`,
+    ...READ_OPTIONS,
+  });
+  return response.data.values || [];
+}
+
+export async function getSettings() {
+  const cached = getCached('settings');
+  if (cached) return cached;
+  const rows = await readTabRows(SHEETS.SETTINGS, SETTINGS_HEADERS);
+  const settings = {};
+  for (const row of rows.slice(1)) {
+    const key = row[0] === undefined || row[0] === null ? '' : String(row[0]).trim();
+    if (!key) continue;
+    settings[key] = row[1] === undefined || row[1] === null ? '' : String(row[1]);
+  }
+  setCache('settings', settings);
+  return settings;
+}
+
+export async function setSetting(key, value) {
+  const rows = await readTabRows(SHEETS.SETTINGS, SETTINGS_HEADERS);
+  const sheets = await getSheets();
+  let rowIndex = -1;
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][0] ?? '').trim() === key) rowIndex = i;
+  }
+  if (rowIndex >= 0) {
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${SHEETS.SETTINGS}!B${rowIndex + 1}`,
+      valueInputOption: 'RAW',
+      requestBody: { values: [[String(value)]] },
+    });
+  } else {
+    await appendRows(sheets, SHEETS.SETTINGS, rows, [[key, String(value)]]);
+  }
+  invalidateCache('settings');
+}
+
+export async function getTenants() {
+  const cached = getCached('tenants');
+  if (cached) return cached;
+  const rows = await readTabRows(SHEETS.TENANTS, TENANT_HEADERS);
+  const tenants = rows.slice(1)
+    .filter(r => r.some(c => String(c ?? '').trim() !== ''))
+    .map(parseTenantRow);
+  setCache('tenants', tenants);
+  return tenants;
+}
+
+export async function saveTenant(t) {
+  const reason = validateTenant(t);
+  if (reason) throw new Error(`Invalid tenant: ${reason}`);
+
+  const rows = await readTabRows(SHEETS.TENANTS, TENANT_HEADERS);
+  const sheets = await getSheets();
+  const ids = rows.slice(1).map(r => parseInt(r[0], 10)).filter(n => !Number.isNaN(n));
+  const existingId = t.id ? Number(t.id) : null;
+  const id = existingId || (ids.length ? Math.max(...ids) + 1 : 1);
+
+  const values = [
+    id,
+    String(t.name).trim(),
+    t.unit || '',
+    Number(t.utility_share),
+    t.utility_style,
+    t.base_rent === null || t.base_rent === undefined || t.base_rent === '' ? '' : parseAmount(t.base_rent),
+    t.separate_max === null || t.separate_max === undefined || t.separate_max === '' ? '' : parseAmount(t.separate_max),
+    t.match_text || '',
+    t.start_month || '',
+    t.end_month || '',
+    t.is_active === false ? false : true,
+  ];
+
+  let rowIndex = -1;
+  if (existingId) {
+    for (let i = 1; i < rows.length; i++) {
+      if (parseInt(rows[i][0], 10) === existingId) rowIndex = i;
+    }
+    if (rowIndex < 0) throw new Error(`Invalid tenant: id ${existingId} not found`);
+  }
+  if (rowIndex >= 0) {
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${SHEETS.TENANTS}!A${rowIndex + 1}:${colLetter(TENANT_HEADERS.length)}${rowIndex + 1}`,
+      valueInputOption: 'RAW',
+      requestBody: { values: [values] },
+    });
+  } else {
+    await appendRows(sheets, SHEETS.TENANTS, rows, [values]);
+  }
+  invalidateCache('tenants');
+  return parseTenantRow(values);
+}
+
+export async function getReceiptLinks() {
+  const cached = getCached('receipts');
+  if (cached) return cached;
+  const rows = await readTabRows(SHEETS.RECEIPTS, RECEIPT_HEADERS);
+  const links = rows.slice(1).map(parseReceiptRow).filter(l => l.drive_file_id);
+  setCache('receipts', links);
+  return links;
+}
+
+export async function linkReceipt(link) {
+  const rows = await readTabRows(SHEETS.RECEIPTS, RECEIPT_HEADERS);
+  const sheets = await getSheets();
+  const values = [
+    link.drive_file_id,
+    link.file_name || '',
+    link.mime_type || '',
+    link.transaction_id,
+    new Date().toISOString(),
+  ];
+  let rowIndex = -1;
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][0] ?? '').trim() === link.drive_file_id) rowIndex = i;
+  }
+  if (rowIndex >= 0) {
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${SHEETS.RECEIPTS}!A${rowIndex + 1}:E${rowIndex + 1}`,
+      valueInputOption: 'RAW',
+      requestBody: { values: [values] },
+    });
+  } else {
+    await appendRows(sheets, SHEETS.RECEIPTS, rows, [values]);
+  }
+  invalidateCache('receipts');
+  return parseReceiptRow(values);
+}
+
+// Clears transaction_id on the row; never deletes rows.
+export async function unlinkReceipt(driveFileId) {
+  const rows = await readTabRows(SHEETS.RECEIPTS, RECEIPT_HEADERS);
+  const sheets = await getSheets();
+  let rowIndex = -1;
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][0] ?? '').trim() === driveFileId) rowIndex = i;
+  }
+  if (rowIndex < 0) return false;
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: SPREADSHEET_ID,
+    range: `${SHEETS.RECEIPTS}!D${rowIndex + 1}`,
+    valueInputOption: 'RAW',
+    requestBody: { values: [['']] },
+  });
+  invalidateCache('receipts');
+  return true;
+}
+
+
+export async function getAllTransactions() {
+  return (await getCachedTransactionRows()).filter(t => t.parse_error === null);
+}
+
+// Straight from the sheet, never the cache: for checks that must see rows added since (import duplicates).
+// The result also refreshes the cache.
+export async function getAllTransactionsFresh() {
+  const all = await fetchTransactionsFromSheets();
+  setCache('transactions', all);
+  return all.filter(t => t.parse_error === null);
+}
+
+export async function getParseIssues() {
+  return (await getCachedTransactionRows()).filter(t => t.parse_error !== null);
+}
+
+// `verify(freshTransactions)` runs on the same fresh read the append is based on, just before it; it can
+// throw to stop the append (the import commit uses it to refuse when the account changed since the preview).
+export async function createTransactions(transactionsData, { verify } = {}) {
+  const sheets = await getSheets();
+  // Fresh read so ids never collide with rows added since the cache was filled.
+  const { values, transactions: existing } = await readTransactionSheet();
+  if (verify) verify(existing.filter(t => t.parse_error === null));
+
+  const ids = existing.map(t => t.id).filter(id => id !== null);
+  const firstId = ids.length > 0 ? Math.max(...ids) + 1 : 1;
+  let nextId = firstId;
   const now = new Date().toISOString();
 
   const rows = transactionsData.map(t => [
@@ -353,46 +633,58 @@ export async function createTransactions(transactionsData) {
   ]);
 
   if (rows.length > 0) {
-    await sheets.spreadsheets.values.append({
+    await appendRows(sheets, SHEETS.TRANSACTIONS, values, rows);
+  }
+
+  invalidateCache('transactions');
+
+  return { created: rows.length, first_id: firstId };
+}
+
+const FIELD_COLUMNS = { category: 'F', notes: 'J', tax_tag: 'K' };
+// Columns added in V2: their header cells are filled in on the first edit if still empty.
+const ADDED_HEADERS = [['J', 9], ['K', 10]];
+
+export async function updateTransactionFields(id, fields) {
+  const sheets = await getSheets();
+  const targetId = parseInt(id);
+
+  // Fresh read: row numbers must be current.
+  const { values, transactions } = await readTransactionSheet();
+  const matches = transactions.filter(t => t.id === targetId);
+  if (matches.length === 0) throw new Error('Transaction not found');
+  if (matches.length > 1) throw new Error('Duplicate transaction id');
+  const row = matches[0];
+
+  const data = Object.entries(FIELD_COLUMNS)
+    .filter(([name]) => fields[name] !== undefined)
+    .map(([name, col]) => ({
+      range: `${SHEETS.TRANSACTIONS}!${col}${row.row_number}`,
+      values: [[fields[name]]],
+    }));
+  const header = values[0] || [];
+  if (data.length > 0) {
+    for (const [col, index] of ADDED_HEADERS) {
+      if (String(header[index] ?? '').trim() === '') {
+        data.push({ range: `${SHEETS.TRANSACTIONS}!${col}1`, values: [[TRANSACTION_HEADERS[index]]] });
+      }
+    }
+  }
+
+  if (data.length > 0) {
+    await sheets.spreadsheets.values.batchUpdate({
       spreadsheetId: SPREADSHEET_ID,
-      range: `${SHEETS.TRANSACTIONS}!A:I`,
-      valueInputOption: 'RAW',
-      requestBody: { values: rows },
+      requestBody: { valueInputOption: 'RAW', data },
     });
   }
 
   invalidateCache('transactions');
 
-  return rows.length;
-}
-
-export async function updateTransactionCategory(id, category) {
-  const sheets = await getSheets();
-
-  // Find the row index
-  const response = await sheets.spreadsheets.values.get({
-    spreadsheetId: SPREADSHEET_ID,
-    range: `${SHEETS.TRANSACTIONS}!A:I`,
-  });
-
-  const rows = response.data.values || [];
-  const rowIndex = rows.findIndex((row, i) => i > 0 && parseInt(row[0]) === parseInt(id));
-
-  if (rowIndex === -1) {
-    throw new Error('Transaction not found');
+  const updated = { ...row };
+  for (const name of Object.keys(FIELD_COLUMNS)) {
+    if (fields[name] !== undefined) updated[name] = fields[name];
   }
-
-  // Update the category (column F = index 5)
-  await sheets.spreadsheets.values.update({
-    spreadsheetId: SPREADSHEET_ID,
-    range: `${SHEETS.TRANSACTIONS}!F${rowIndex + 1}`,
-    valueInputOption: 'RAW',
-    requestBody: { values: [[category]] },
-  });
-
-  invalidateCache('transactions');
-
-  return { success: true };
+  return updated;
 }
 
 // ============ BUDGETS ============
@@ -403,20 +695,19 @@ async function fetchBudgetsFromSheets() {
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId: SPREADSHEET_ID,
     range: `${SHEETS.BUDGETS}!A:F`,
+    ...READ_OPTIONS,
   });
 
   const rows = response.data.values || [];
   if (rows.length <= 1) return [];
 
-  const [headers, ...data] = rows;
-
-  return data.map(row => ({
+  return rows.slice(1).map(row => ({
     id: parseInt(row[0]) || 0,
-    category_name: row[1] || '',
-    monthly_limit: parseFloat(row[2]) || 0,
-    alert_threshold: parseFloat(row[3]) || 80,
-    is_active: row[4] !== 'false',
-    created_at: row[5] || '',
+    category_name: row[1] === undefined || row[1] === null ? '' : String(row[1]),
+    monthly_limit: parseAmount(row[2]) ?? 0,
+    alert_threshold: parseAmount(row[3]) ?? 80,
+    is_active: parseBool(row[4], true),
+    created_at: row[5] === undefined || row[5] === null ? '' : String(row[5]),
   }));
 }
 

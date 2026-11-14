@@ -46,6 +46,16 @@ function CategoryControl({
   const label = `Category for ${transaction.description}`;
   const errorId = `${idPrefix}-cat-err-${transaction.id}`;
 
+  // A row with no id in the sheet can't be saved back (edits find their row by id), so it is read-only.
+  if (transaction.id === null || transaction.id === undefined) {
+    return (
+      <div className="space-y-1">
+        <p className="text-sm text-text-secondary">{transaction.category || 'Uncategorized'}</p>
+        <p className="text-xs text-text-muted">Read-only: this row has no id in the sheet.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-1">
       {isEditing ? (
@@ -176,19 +186,12 @@ export default function Transactions() {
       if (filterSearch) params.search = filterSearch;
       if (filterStartDate) params.start_date = filterStartDate;
       if (filterEndDate) params.end_date = filterEndDate;
+      if (filterAmountType) params.type = filterAmountType;
 
       const data = await api.getTransactions(params);
       if (thisRequest !== requestId.current) return;
       if (data.error) throw new Error(data.error);
-      let txns = data.transactions || [];
-
-      if (filterAmountType === 'income') {
-        txns = txns.filter(t => t.amount > 0);
-      } else if (filterAmountType === 'expense') {
-        txns = txns.filter(t => t.amount < 0);
-      }
-
-      setTransactions(txns);
+      setTransactions(data.transactions || []);
       setTotal(data.total || 0);
       if (data.categories) {
         setAvailableCategories(data.categories);
@@ -222,6 +225,7 @@ export default function Transactions() {
   // Pessimistic: the row only changes once the sheet has accepted it.
   const saveCategory = async (transaction, category) => {
     const id = transaction.id;
+    if (id === null || id === undefined) return false;
     if (rowStates[id]?.status === 'saving') return false;
     clearTimeout(savedTimers.current[id]);
     setRowState(id, { status: 'saving' });
@@ -243,7 +247,7 @@ export default function Transactions() {
   };
 
   const handleCategoryChange = (transaction, value) => {
-    if (value === CURRENT_OPTION) return;
+    if (value === CURRENT_OPTION || transaction.id === null || transaction.id === undefined) return;
     if (value === CUSTOM_OPTION) {
       setEditingId(transaction.id);
       setCustomCategory('');
@@ -291,12 +295,13 @@ export default function Transactions() {
   const totalPages = Math.ceil(total / limit);
   const firstLoad = loading && transactions.length === 0 && !loadError;
 
+  const hasId = (transaction) => transaction.id !== null && transaction.id !== undefined;
   const categoryProps = (transaction, idPrefix) => ({
     idPrefix,
     transaction,
     availableCategories,
-    rowState: rowStates[transaction.id],
-    isEditing: editingId === transaction.id,
+    rowState: hasId(transaction) ? rowStates[transaction.id] : undefined,
+    isEditing: hasId(transaction) && editingId === transaction.id,
     customCategory,
     customError,
     onCustomChange: (v) => { setCustomCategory(v); if (customError) setCustomError(null); },
@@ -362,8 +367,9 @@ export default function Transactions() {
             <label htmlFor="txn-amount" className={labelClasses}>Amount</label>
             <select id="txn-amount" value={filterAmountType} onChange={(e) => setFilterAmountType(e.target.value)} className={controlClasses}>
               <option value="">All</option>
-              <option value="income">Income only</option>
-              <option value="expense">Expenses only</option>
+              {/* By sign: money in includes refunds, money out includes transfers out. */}
+              <option value="income">Money in</option>
+              <option value="expense">Money out</option>
             </select>
           </div>
         </div>
@@ -407,7 +413,7 @@ export default function Transactions() {
             {/* Mobile: stacked rows */}
             <ul className="md:hidden divide-y divide-border">
               {transactions.map((transaction) => (
-                <li key={transaction.id} className="px-4 py-3 space-y-2">
+                <li key={transaction.row_number ?? transaction.id} className="px-4 py-3 space-y-2">
                   <div className="flex items-start justify-between gap-3">
                     <p className="min-w-0 text-sm text-text-primary break-words">{transaction.description}</p>
                     <p className={`shrink-0 text-sm font-medium tabular text-right ${amountClass(transaction.amount)}`}>
@@ -436,7 +442,7 @@ export default function Transactions() {
               </thead>
               <tbody className="divide-y divide-border">
                 {transactions.map((transaction) => (
-                  <tr key={transaction.id} className="hover:bg-surface-hover/60 transition-colors align-top">
+                  <tr key={transaction.row_number ?? transaction.id} className="hover:bg-surface-hover/60 transition-colors align-top">
                     <td className="px-6 py-3 whitespace-nowrap text-sm text-text-secondary tabular">{transaction.date}</td>
                     <td className="px-6 py-3 whitespace-nowrap text-sm text-text-tertiary">{transaction.account_name}</td>
                     <td className="px-6 py-3 text-sm text-text-primary max-w-md truncate" title={transaction.description}>{transaction.description}</td>

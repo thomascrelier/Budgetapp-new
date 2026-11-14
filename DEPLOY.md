@@ -10,17 +10,45 @@
 
 ---
 
+## V2 Setup (one time)
+
+Do these once after deploying V2. Step 1 is in Google Cloud, step 2 in Google Drive, steps 3 to 5 in the app.
+
+1. **Turn on the Google Drive API.** In Google Cloud Console, open the project that owns the service account (the one in `GOOGLE_CREDENTIALS_JSON`), go to *APIs & Services → Library*, search for "Google Drive API" and click *Enable*. Until it is on, the Tax tab says the Google Drive API isn't turned on.
+2. **Share a receipts folder with the app.** In Google Drive, create or pick the folder that holds your receipts. Subfolders one level down, such as one per year, are included. Right-click the folder, choose *Share*, paste the service account email and set it to **Viewer**. The Tax tab shows this email with a *Copy* button under *Rental Property → Tax*.
+3. **Tell the app which folder.** Open the folder in Drive and copy its link from the address bar. Paste it on the Tax tab and save. To switch later, use *Change folder*.
+4. **Add tenants.** In *Rental Property → Tenants*, click *Add tenant* for each tenant. Enter:
+   - their unit and share of utilities;
+   - how they pay utilities, either with the rent (above a base rent) or as separate e-transfers (up to a largest amount);
+   - the name as it appears on their e-transfers;
+   - the month they moved in.
+5. **Enter mortgage interest every year.** On the Tax tab, type the year's interest from your lender's year-end statement into "Mortgage interest for YYYY". Line 8710 leaves out the mortgage until you do. Do this again for each new tax year.
+6. **Receipt thumbnails come from Google.** They load only in a browser signed in to the Google account that owns the files. Elsewhere, each tile shows a document icon, and *Open in Drive* still works.
+7. **The sheet updates itself.** The app creates the `Settings`, `Tenants` and `Receipts` tabs, with header rows, the first time it needs them. It also adds two columns to Transactions: J (`notes`) and K (`tax_tag`). The app writes edits back to specific rows, so **never sort the sheet**, and don't move, insert or delete rows. A filter view is fine because it leaves the rows in place.
+8. **Starting balances.** Accounts column D (`initial_balance`) is the account's balance before its first transaction in the sheet. Set it so the balances in the app match the bank.
+
+The rental account is the one named "CIBC Rental". To use another account, add a `rental_account_name` row to the `Settings` tab with that account's exact name.
+
+---
+
 ## Data Pipeline
 
 ```
-Mint CSV Export → import_csv.py → SQLite → sync_to_sheets.py → Google Sheets → Vercel App
+Bank CSV export → Upload CSV (in the app) → Google Sheets → Vercel App
 ```
 
-| Script | Purpose |
-|---|---|
-| `backend/import_csv.py` | Imports Mint CSV exports into SQLite |
-| `backend/sync_to_sheets.py` | Pushes SQLite data to Google Sheets |
-| `backend/import_cibc_nov2026.py` | Appends new CIBC chequing + Visa rows straight to Google Sheets, deduplicated against what is already there (`--offline`, `--dry-run`) |
+Imports happen in the app. Download a CSV from the bank, then click **Upload CSV** in the sidebar. The app supports CIBC chequing and Visa exports (no header row) and CSVs with a header row.
+- It works out which account the file belongs to and categorizes the rows.
+- It skips rows the sheet already has. If the whole file is already there, it says which account has it.
+- It shows what it will add before anything is written. Rows dated well before the account's latest transaction are listed separately and left unchecked; tick the ones you want.
+- On confirm, it appends the new rows to the Transactions tab. Nothing else in the sheet changes.
+
+The Python scripts in `backend/` are **optional and legacy**; the app does not use them.
+- Most of them (`import_csv.py`, `import_*.py`, `fix_uncategorized.py`) wrote to a SQLite file that no longer exists.
+- `import_cibc_nov2026.py` appends CIBC rows straight to the sheet (`--offline`, `--dry-run`). Upload CSV now does this job.
+- The rules in `backend/` are the source `budget-vercel/scripts/export-rules.py` reads to generate `src/lib/rules/data.js`, so keep them.
+
+`sync_to_sheets.py` was removed. It cleared the sheet and rebuilt it from that SQLite file, so running it now would wipe the live data.
 
 ---
 
@@ -135,7 +163,9 @@ Individual margin
 | `ALLOWED_EMAIL` | thomas.crelier@gmail.com |
 
 ### Local (.env.local)
-Same Google credentials go in `budget-vercel/.env.local` (not currently present; needed only for the local scripts, and note `.gitignore` matches `.env`, not `.env.local`)
+Copy `budget-vercel/.env.example` to `budget-vercel/.env.local` and fill in the same Google credentials to run the app or the scripts locally. This checkout has no `.env.local` yet, and `.gitignore` keeps `.env.local` out of git.
+
+The service account in `GOOGLE_CREDENTIALS_JSON` needs both the Google Sheets API and the Google Drive API enabled in its Cloud project (see V2 Setup). Its `client_email` is the address the Tax tab tells you to share the receipts folder with.
 
 ---
 
@@ -152,12 +182,20 @@ Same Google credentials go in `budget-vercel/.env.local` (not currently present;
 9. Zero uncategorized transactions remaining
 10. Imported CIBC chequing + Visa through Nov 10, 2026 (747 rows, deduplicated)
 11. Imported CIBC Rental through Nov 9, 2026 (129 rows, batch `cibc-rental-2026-11-11`)
+12. V2:
+    - The app reads hand-edited cells more reliably.
+    - Spending is defined the same way on every screen.
+    - There is one set of categorization rules.
+    - **Upload CSV** imports in the app, checking for duplicates first.
+    - Rental Property has three tabs: Overview, Tenants (a utility ledger per tenant) and Tax (a T776 with receipts from Drive, tags, capital items and a CSV export).
+    - `sync_to_sheets.py` was removed.
 
 ---
 
 ## Deploy Checklist
 
-- [ ] Sync latest data: `cd backend && python3 sync_to_sheets.py`
+- [ ] Tests pass: `cd budget-vercel && npx vitest run`
+- [ ] Build passes: `cd budget-vercel && npx next build`
 - [ ] Commit changes: `git add . && git commit`
 - [ ] Push to GitHub: `git push origin main`
 - [ ] Vercel auto-deploys from main branch

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { motion } from 'framer-motion';
 import {
   ComposedChart,
@@ -18,6 +18,9 @@ import {
   Cell,
 } from 'recharts';
 import api from '@/lib/api';
+import { currentMonth } from '@/lib/dates';
+import TenantLedger from './rental/TenantLedger';
+import TaxView from './rental/TaxView';
 import { useChartTheme } from './ThemeProvider';
 import PageTransition from './PageTransition';
 
@@ -34,9 +37,7 @@ const summaryItemVariants = {
 const FIRST_YEAR = 2024;
 
 const currency0 = new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD', minimumFractionDigits: 0, maximumFractionDigits: 0 });
-const currency2 = new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD', minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const formatCurrency = (value) => currency0.format(value || 0);
-const formatCurrencyDecimal = (value) => currency2.format(value || 0);
 const formatSigned = (value, fmt = formatCurrency) => `${value > 0 ? '+' : ''}${fmt(value)}`;
 const formatAxis = (v) => {
   const abs = Math.abs(v);
@@ -50,15 +51,20 @@ const formatDelta = (dollars, percent) => {
   return `${sign}${formatCurrency(dollars)} (${sign}${percent.toFixed(1)}%)`;
 };
 
+const TABS = [
+  { id: 'overview', label: 'Overview' },
+  { id: 'tenants', label: 'Tenants' },
+  { id: 'tax', label: 'Tax' },
+];
+const TAB_KEY = 'rental-tab';
+
 const thClass = 'px-4 md:px-6 py-3 text-xs font-semibold text-text-muted uppercase tracking-wider whitespace-nowrap';
 
-export default function RentalProperty() {
+function RentalOverview({ year }) {
   const { gridColor, tickColor, tooltipStyle, positiveColor, negativeColor, accentColor, pieColors } = useChartTheme();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [data, setData] = useState(null);
-  const [year, setYear] = useState(new Date().getFullYear());
-  const [expandedGroups, setExpandedGroups] = useState({});
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -77,37 +83,10 @@ export default function RentalProperty() {
 
   useEffect(() => { loadData(); }, [loadData]);
 
-  const toggleGroup = (groupName) => {
-    setExpandedGroups(prev => ({ ...prev, [groupName]: !prev[groupName] }));
-  };
-
-  const yearOptions = [];
-  for (let y = Math.max(new Date().getFullYear(), 2026); y >= FIRST_YEAR; y--) yearOptions.push(y);
-
-  const header = (
-    <div className="flex flex-wrap items-end justify-between gap-4">
-      <div>
-        <h1 className="text-3xl font-semibold text-text-primary">Rental Property</h1>
-        <p className="text-text-tertiary mt-1">Analytics & tax summary for your rental property</p>
-      </div>
-      <label className="flex items-center gap-2 text-sm text-text-tertiary">
-        <span>Tax year</span>
-        <select
-          value={year}
-          onChange={(e) => setYear(parseInt(e.target.value))}
-          className="min-h-11 px-4 py-2 border border-border rounded-lg bg-surface text-text-primary tabular focus:outline-none focus-visible:ring-1 focus-visible:ring-accent/50"
-        >
-          {yearOptions.map((y) => (<option key={y} value={y}>{y}</option>))}
-        </select>
-      </label>
-    </div>
-  );
-
   // First load: a skeleton in the page's real shape, not a bare spinner.
   if (loading && !data) {
     return (
       <div className="space-y-8" aria-busy="true">
-        {header}
         <span role="status" className="sr-only">Loading rental property data for {year}</span>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4" aria-hidden="true">
           {[0, 1, 2].map((i) => (
@@ -126,7 +105,6 @@ export default function RentalProperty() {
   if (error && !data) {
     return (
       <div className="space-y-8">
-        {header}
         <div role="alert" className="glass-card rounded-xl p-8 md:p-12 text-center">
           <p className="text-text-primary font-medium">Couldn&rsquo;t load rental property data for {year}.</p>
           <p className="text-text-tertiary text-sm mt-1">{error}</p>
@@ -146,12 +124,9 @@ export default function RentalProperty() {
     prev_year = year - 1,
     annual_summary = {},
     prev_annual_summary = {},
-    t776_summary = [],
     monthly_data = [],
     prev_monthly_data = [],
     category_breakdown = [],
-    t776_pie_data = [],
-    utility_tracker = [],
   } = data || {};
 
   const mergedMonthlyData = monthly_data.map((m, i) => ({
@@ -166,11 +141,15 @@ export default function RentalProperty() {
     .filter(c => !c.is_income)
     .map(c => ({ category: c.category, [String(year)]: c.selected_year_total, [String(prev_year)]: c.prev_year_total }));
 
-  const pieTotal = t776_pie_data.reduce((s, d) => s + (d.value || 0), 0);
+  const expensePieData = category_breakdown
+    .filter(c => !c.is_income && c.selected_year_total > 0)
+    .map(c => ({ name: c.category, value: c.selected_year_total }));
+  const pieTotal = expensePieData.reduce((s, d) => s + (d.value || 0), 0);
+  // The Category Details dots use the pie's colours; rows not in the pie (income, no spend this year) get none.
+  const pieColorOf = new Map(expensePieData.map((d, i) => [d.name, pieColors[i % pieColors.length]]));
 
   const incomeDeltaColor = (dollars) => dollars >= 0 ? 'text-positive' : 'text-negative';
   const expenseDeltaColor = (dollars) => dollars <= 0 ? 'text-positive' : 'text-negative';
-  const groupDeltaColor = (group) => group.is_income ? incomeDeltaColor(group.delta_dollars) : expenseDeltaColor(group.delta_dollars);
 
   const income = annual_summary.total_income || 0;
   const expenses = annual_summary.total_expenses || 0;
@@ -213,9 +192,8 @@ export default function RentalProperty() {
   const yoyChartLabel = `Horizontal bar chart comparing expense categories in ${year} and ${prev_year}. Exact figures are in the Category Details table below.`;
 
   return (
-    <PageTransition>
+    <>
       <div className={`space-y-8 transition-opacity duration-200 ${loading ? 'opacity-60' : ''}`} aria-busy={loading}>
-        {header}
         {loading && <span role="status" className="sr-only">Loading {year}</span>}
         {error && (
           <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-negative/30 bg-negative/5 px-4 py-3 text-sm">
@@ -245,127 +223,6 @@ export default function RentalProperty() {
           ))}
         </motion.div>
 
-        {/* T776 Tax Summary */}
-        {t776_summary.length > 0 && (
-          <section className="glass-card rounded-xl overflow-hidden" aria-labelledby="t776-heading">
-            <div className="px-4 md:px-6 py-4 border-b border-border/50">
-              <h2 id="t776-heading" className="text-lg font-semibold text-text-primary">T776 Rental Income Tax Summary</h2>
-              <p className="text-text-muted text-sm mt-1">CRA rental income form line groupings — select a line to see its categories</p>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full tabular">
-                <thead className="bg-surface">
-                  <tr>
-                    <th scope="col" className={`${thClass} text-left`}>T776 Line</th>
-                    <th scope="col" className={`${thClass} text-right`}>{year}</th>
-                    <th scope="col" className={`${thClass} text-right`}>{prev_year}</th>
-                    <th scope="col" className={`${thClass} text-right`}>Change</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border/50">
-                  {t776_summary.map((group) => {
-                    const expanded = !!expandedGroups[group.group_name];
-                    return (
-                      <React.Fragment key={group.group_name}>
-                        <tr className="hover:bg-surface-hover/50 transition-colors cursor-pointer" onClick={() => toggleGroup(group.group_name)}>
-                          <th scope="row" className="px-4 md:px-6 py-2 text-left whitespace-nowrap font-normal">
-                            <button
-                              type="button"
-                              aria-expanded={expanded}
-                              onClick={(e) => { e.stopPropagation(); toggleGroup(group.group_name); }}
-                              className="flex items-center gap-2 min-h-11 text-left"
-                            >
-                              <svg aria-hidden="true" className={`w-4 h-4 text-text-muted transition-transform ${expanded ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                              </svg>
-                              <span className="font-semibold text-text-primary">{group.group_name}</span>
-                            </button>
-                          </th>
-                          <td className="px-4 md:px-6 py-2 text-right whitespace-nowrap font-display text-text-primary">{formatCurrency(group.selected_year_total)}</td>
-                          <td className="px-4 md:px-6 py-2 text-right whitespace-nowrap text-text-secondary">{formatCurrency(group.prev_year_total)}</td>
-                          <td className={`px-4 md:px-6 py-2 text-right whitespace-nowrap text-sm ${groupDeltaColor(group)}`}>{formatDelta(group.delta_dollars, group.delta_percent)}</td>
-                        </tr>
-                        {expanded && group.children.map((child) => (
-                          <tr key={child.category} className="bg-surface-hover/30">
-                            <th scope="row" className="px-4 md:px-6 py-3 pl-12 md:pl-14 text-left whitespace-nowrap text-text-tertiary text-sm font-normal">{child.category}</th>
-                            <td className="px-4 md:px-6 py-3 text-right whitespace-nowrap text-text-tertiary text-sm">{formatCurrency(child.selected_year_total)}</td>
-                            <td className="px-4 md:px-6 py-3 text-right whitespace-nowrap text-text-muted text-sm">{formatCurrency(child.prev_year_total)}</td>
-                            <td className={`px-4 md:px-6 py-3 text-right whitespace-nowrap text-xs ${groupDeltaColor(group)}`}>{formatDelta(child.delta_dollars, child.delta_percent)}</td>
-                          </tr>
-                        ))}
-                      </React.Fragment>
-                    );
-                  })}
-                  <tr className="border-t-2 border-accent/40 bg-surface">
-                    <th scope="row" className="px-4 md:px-6 py-4 text-left whitespace-nowrap font-bold text-text-primary">Net Rental Income</th>
-                    <td className={`px-4 md:px-6 py-4 text-right whitespace-nowrap font-display font-bold ${net >= 0 ? 'text-positive' : 'text-negative'}`}>{formatSigned(net)}</td>
-                    <td className={`px-4 md:px-6 py-4 text-right whitespace-nowrap font-bold ${prevNet >= 0 ? 'text-positive' : 'text-negative'}`}>{formatSigned(prevNet)}</td>
-                    <td className={`px-4 md:px-6 py-4 text-right whitespace-nowrap font-bold ${incomeDeltaColor(net - prevNet)}`}>
-                      {formatDelta(net - prevNet, prevNet ? ((net - prevNet) / Math.abs(prevNet)) * 100 : null)}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </section>
-        )}
-
-        {/* Utility Tracker */}
-        {utility_tracker.length > 0 && (
-          <section className="glass-card rounded-xl overflow-hidden" aria-labelledby="utility-heading">
-            <div className="px-4 md:px-6 py-4 border-b border-border/50">
-              <h2 id="utility-heading" className="text-lg font-semibold text-text-primary">Tenant Utility Recovery</h2>
-              <p className="text-text-muted text-sm mt-1">Elec & gas recovered same month; water (quarterly) recovered following month</p>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full tabular [&_td]:px-3 [&_th]:px-3 [&_th]:tracking-wide">
-                <thead className="bg-surface">
-                  <tr>
-                    <th scope="col" className={`${thClass} text-left sticky left-0 z-10 bg-surface`}>Month</th>
-                    <th scope="col" className={`${thClass} text-right`}>Electricity</th>
-                    <th scope="col" className={`${thClass} text-right`}>Gas</th>
-                    <th scope="col" className={`${thClass} text-right`}>Water</th>
-                    <th scope="col" className={`${thClass} text-right`}>Total Bills</th>
-                    <th scope="col" className={`${thClass} text-right`}>Brandon (40%)</th>
-                    <th scope="col" className={`${thClass} text-right`}>Madison (60%)</th>
-                    <th scope="col" className={`${thClass} text-right`}>Collected</th>
-                    <th scope="col" className={`${thClass} text-right`}>Delta</th>
-                    <th scope="col" className={`${thClass} text-right`}>Running Bal.</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border/50">
-                  {utility_tracker.map((row) => {
-                    const deltaColor = row.pending ? 'text-warning' : row.delta < -2 ? 'text-negative' : row.delta > 2 ? 'text-positive' : 'text-text-secondary';
-                    const balColor = row.running_balance < -2 ? 'text-negative' : row.running_balance > 2 ? 'text-positive' : 'text-text-secondary';
-                    const cell = 'px-4 py-3 text-right whitespace-nowrap text-sm';
-                    return (
-                      <tr key={row.month} className="hover:bg-surface-hover/50 transition-colors">
-                        <th scope="row" className="px-4 py-3 text-left whitespace-nowrap font-medium text-text-primary sticky left-0 z-10 bg-surface">
-                          {row.month_label}
-                          {row.pending && (<span className="ml-2 text-xs bg-warning/10 text-warning px-2 py-0.5 rounded-full">Pending</span>)}
-                        </th>
-                        <td className={`${cell} text-text-secondary`}>{row.electricity > 0 ? formatCurrencyDecimal(row.electricity) : '—'}</td>
-                        <td className={`${cell} text-text-secondary`}>{row.gas > 0 ? formatCurrencyDecimal(row.gas) : '—'}</td>
-                        <td className={`${cell} text-text-secondary`}>{row.water > 0 ? formatCurrencyDecimal(row.water) : '—'}</td>
-                        <td className={`${cell} font-medium text-text-primary`}>{formatCurrencyDecimal(row.total_billed)}</td>
-                        <td className={`${cell} text-text-secondary`}>{row.pending ? '—' : formatCurrencyDecimal(row.brandon_contribution)}</td>
-                        <td className={`${cell} text-text-secondary`}>{row.pending ? '—' : formatCurrencyDecimal(row.madison_contribution)}</td>
-                        <td className={`${cell} font-medium text-text-primary`}>{row.pending ? '—' : formatCurrencyDecimal(row.total_collected)}</td>
-                        <td className={`${cell} font-semibold ${deltaColor}`}>
-                          {row.pending ? 'Pending' : formatSigned(row.delta, formatCurrencyDecimal)}
-                        </td>
-                        <td className={`${cell} font-semibold ${balColor}`}>
-                          {row.pending ? '—' : formatSigned(row.running_balance, formatCurrencyDecimal)}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </section>
-        )}
-
         {/* Charts */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <section className="glass-card rounded-xl p-4 md:p-6 min-w-0" aria-labelledby="monthly-heading">
@@ -393,13 +250,13 @@ export default function RentalProperty() {
 
           <section className="glass-card rounded-xl p-4 md:p-6 min-w-0" aria-labelledby="breakdown-heading">
             <h2 id="breakdown-heading" className="text-lg font-semibold text-text-primary mb-4">Expense Breakdown</h2>
-            {t776_pie_data.length > 0 ? (
+            {expensePieData.length > 0 ? (
               <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] gap-4 items-center">
                 <div className="h-48 md:h-56" aria-hidden="true">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
-                      <Pie data={t776_pie_data} cx="50%" cy="50%" innerRadius="55%" outerRadius="90%" paddingAngle={1} dataKey="value" nameKey="name" stroke="none">
-                        {t776_pie_data.map((entry, index) => (<Cell key={`cell-${index}`} fill={pieColors[index % pieColors.length]} />))}
+                      <Pie data={expensePieData} cx="50%" cy="50%" innerRadius="55%" outerRadius="90%" paddingAngle={1} dataKey="value" nameKey="name" stroke="none">
+                        {expensePieData.map((entry, index) => (<Cell key={`cell-${index}`} fill={pieColors[index % pieColors.length]} />))}
                       </Pie>
                       <Tooltip formatter={(value) => formatCurrency(value)} contentStyle={tooltipStyle} />
                     </PieChart>
@@ -407,7 +264,7 @@ export default function RentalProperty() {
                 </div>
                 {/* The legend doubles as the chart's text alternative: name, amount, share. */}
                 <ul className="space-y-2 text-sm tabular">
-                  {t776_pie_data.map((entry, index) => (
+                  {expensePieData.map((entry, index) => (
                     <li key={entry.name} className="flex items-center gap-2">
                       <span aria-hidden="true" className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: pieColors[index % pieColors.length] }} />
                       <span className="text-text-secondary truncate min-w-0 flex-1">{entry.name}</span>
@@ -462,11 +319,11 @@ export default function RentalProperty() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/50">
-                  {category_breakdown.map((item, index) => (
+                  {category_breakdown.map((item) => (
                     <tr key={item.category} className="hover:bg-surface-hover/50 transition-colors">
                       <th scope="row" className="px-4 md:px-6 py-4 text-left whitespace-nowrap font-normal">
                         <div className="flex items-center gap-3">
-                          <span aria-hidden="true" className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: pieColors[index % pieColors.length] }} />
+                          <span aria-hidden="true" className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: pieColorOf.get(item.category) || 'transparent' }} />
                           <span className="font-medium text-text-primary">{item.category}</span>
                           {item.is_income && (<span className="text-xs bg-positive/10 text-positive px-2 py-0.5 rounded-full">Income</span>)}
                         </div>
@@ -485,6 +342,97 @@ export default function RentalProperty() {
             <div className="p-12 text-center text-text-tertiary">No data available for {year}</div>
           )}
         </section>
+      </div>
+    </>
+  );
+}
+
+export default function RentalProperty() {
+  const [year, setYear] = useState(() => parseInt(currentMonth().slice(0, 4), 10));
+  const [tab, setTab] = useState('overview');
+  const tabRefs = useRef({});
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(TAB_KEY);
+      if (TABS.some((t) => t.id === saved)) setTab(saved);
+    } catch { /* storage unavailable: stay on Overview */ }
+  }, []);
+
+  const selectTab = (id) => {
+    setTab(id);
+    try { localStorage.setItem(TAB_KEY, id); } catch { /* ignore */ }
+  };
+
+  const onTabKeyDown = (e) => {
+    const i = TABS.findIndex((t) => t.id === tab);
+    let next = null;
+    if (e.key === 'ArrowRight') next = (i + 1) % TABS.length;
+    else if (e.key === 'ArrowLeft') next = (i - 1 + TABS.length) % TABS.length;
+    else if (e.key === 'Home') next = 0;
+    else if (e.key === 'End') next = TABS.length - 1;
+    if (next === null) return;
+    e.preventDefault();
+    const id = TABS[next].id;
+    selectTab(id);
+    tabRefs.current[id]?.focus();
+  };
+
+  const yearOptions = [];
+  const thisYear = parseInt(currentMonth().slice(0, 4), 10);
+  for (let y = Math.max(thisYear, 2026); y >= FIRST_YEAR; y--) yearOptions.push(y);
+
+  return (
+    <PageTransition>
+      <div className="space-y-8">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-semibold text-text-primary">Rental Property</h1>
+            <p className="text-text-tertiary mt-1">Analytics, tenants and tax summary for your rental property</p>
+          </div>
+          {tab !== 'tenants' && (
+            <label className="flex items-center gap-2 text-sm text-text-tertiary">
+              <span>Tax year</span>
+              <select
+                value={year}
+                onChange={(e) => setYear(parseInt(e.target.value, 10))}
+                className="min-h-11 px-4 py-2 border border-border rounded-lg bg-surface text-text-primary tabular focus:outline-none focus-visible:ring-1 focus-visible:ring-accent/50"
+              >
+                {yearOptions.map((y) => (<option key={y} value={y}>{y}</option>))}
+              </select>
+            </label>
+          )}
+        </div>
+
+        <div role="tablist" aria-label="Rental property sections" className="flex gap-1 border-b border-border/50" onKeyDown={onTabKeyDown}>
+          {TABS.map((t) => {
+            const selected = tab === t.id;
+            return (
+              <button
+                key={t.id}
+                ref={(el) => { tabRefs.current[t.id] = el; }}
+                type="button"
+                role="tab"
+                id={`rental-tab-${t.id}`}
+                aria-selected={selected}
+                aria-controls={`rental-panel-${t.id}`}
+                tabIndex={selected ? 0 : -1}
+                onClick={() => selectTab(t.id)}
+                className={`min-h-11 px-4 -mb-px border-b-2 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 rounded-t-lg ${
+                  selected ? 'border-accent text-accent-text' : 'border-transparent text-text-tertiary hover:text-text-primary'
+                }`}
+              >
+                {t.label}
+              </button>
+            );
+          })}
+        </div>
+
+        <div role="tabpanel" id={`rental-panel-${tab}`} aria-labelledby={`rental-tab-${tab}`} tabIndex={0} className="focus:outline-none focus-visible:ring-1 focus-visible:ring-accent/50 rounded-lg">
+          {tab === 'overview' && <RentalOverview year={year} />}
+          {tab === 'tenants' && <TenantLedger />}
+          {tab === 'tax' && <TaxView year={year} />}
+        </div>
       </div>
     </PageTransition>
   );

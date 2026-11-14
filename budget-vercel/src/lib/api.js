@@ -2,6 +2,28 @@
 
 const API_BASE = '/api';
 
+// Resolves with the JSON body, or rejects with the API's `error` message (also for non-JSON failures).
+async function request(url, options) {
+  const res = await fetch(url, options);
+  let data = null;
+  try {
+    data = await res.json();
+  } catch {
+    /* empty or non-JSON body */
+  }
+  // A 200 may still carry `error` (the receipts route reports Drive problems that way): callers read it.
+  if (!res.ok || !data) {
+    throw new Error((data && data.error) || `Request failed (${res.status})`);
+  }
+  return data;
+}
+
+const jsonBody = (method, body) => ({
+  method,
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify(body),
+});
+
 export const api = {
   // Accounts
   getAccounts: () => fetch(`${API_BASE}/accounts`).then(r => r.json()),
@@ -21,16 +43,18 @@ export const api = {
     if (params.category) searchParams.set('category', params.category);
     if (params.start_date) searchParams.set('start_date', params.start_date);
     if (params.end_date) searchParams.set('end_date', params.end_date);
+    if (params.type) searchParams.set('type', params.type);
     if (params.search) searchParams.set('search', params.search);
     if (params.skip) searchParams.set('skip', params.skip);
     if (params.limit) searchParams.set('limit', params.limit);
     return fetch(`${API_BASE}/transactions?${searchParams}`).then(r => r.json());
   },
-  updateCategory: (id, category) => fetch(`${API_BASE}/transactions/${id}/category`, {
+  updateTransaction: (id, fields) => fetch(`${API_BASE}/transactions/${id}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ category }),
+    body: JSON.stringify(fields),
   }).then(r => r.json()),
+  updateCategory: (id, category) => api.updateTransaction(id, { category }),
 
   // Budgets
   getBudgets: () => fetch(`${API_BASE}/budgets`).then(r => r.json()),
@@ -70,18 +94,47 @@ export const api = {
     return fetch(`${API_BASE}/analytics/rental-property?${searchParams}`).then(r => r.json());
   },
 
+  // Settings
+  getSettings: () => request(`${API_BASE}/settings`),
+  saveSetting: (key, value) => request(`${API_BASE}/settings`, jsonBody('POST', { key, value })),
+
+  // Tax (T776) and receipts. These reject with the API's error message.
+  getT776: (year) => request(`${API_BASE}/rental/t776?year=${encodeURIComponent(year)}`),
+  t776CsvUrl: (year) => `${API_BASE}/rental/t776?year=${encodeURIComponent(year)}&format=csv`,
+  // Resolves with the CSV as a Blob; rejects with the API's error when it answers with JSON instead.
+  getT776Csv: async (year) => {
+    const res = await fetch(api.t776CsvUrl(year));
+    if (res.ok && (res.headers.get('content-type') || '').includes('text/csv')) return res.blob();
+    let data = null;
+    try { data = await res.json(); } catch { /* not JSON */ }
+    throw new Error((data && data.error) || `Request failed (${res.status})`);
+  },
+  getReceipts: (year) => request(`${API_BASE}/receipts?year=${encodeURIComponent(year)}`),
+  linkReceipt: (link) => request(`${API_BASE}/receipts/link`, jsonBody('POST', link)),
+  unlinkReceipt: (driveFileId) => request(
+    `${API_BASE}/receipts/link?drive_file_id=${encodeURIComponent(driveFileId)}`,
+    { method: 'DELETE' },
+  ),
+
   // Cache
   refreshData: () => fetch(`${API_BASE}/cache/refresh`, { method: 'POST' }).then(r => r.json()),
 
-  // Upload
-  uploadCSV: async (file, accountId) => {
+  // Import
+  previewImport: async (file, accountId) => {
     const formData = new FormData();
     formData.append('file', file);
-    formData.append('account_id', accountId);
-    return fetch(`${API_BASE}/upload`, {
+    if (accountId) formData.append('account_id', accountId);
+    return fetch(`${API_BASE}/import/preview`, { method: 'POST', body: formData }).then(r => r.json());
+  },
+  // Resolves with the JSON body; `changed` is true when the account changed since the preview (409).
+  commitImport: async (accountId, rows, accountVersion) => {
+    const res = await fetch(`${API_BASE}/import/commit`, {
       method: 'POST',
-      body: formData,
-    }).then(r => r.json());
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ account_id: accountId, account_version: accountVersion, rows }),
+    });
+    const data = await res.json();
+    return { ...data, changed: res.status === 409 };
   },
 };
 
